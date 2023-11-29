@@ -4,16 +4,18 @@
   "parameters": {
     "Prefix": {
       "type": "string",
-      "defaultValue": "wvd"
+      "defaultValue": "stateless"
     },
     "AdminUserName": {
-      "type": "string"
+      "type": "string",
+	  "defaultValue": "awebber"
     },
     "AdminPassword": {
       "type": "securestring"
     },
     "DomainFQDN": {
-      "type": "string"
+      "type": "string",
+	  "defaultValue": "domain.local"
     },
     "Instance": {
       "type": "int",
@@ -39,19 +41,25 @@
       ]
     },
     "VnetRgName": {
-      "type": "string"
+      "type": "string",
+	  "defaultValue": "rg_uks_networking"
     },
     "VnetName": {
-      "type": "string"
+      "type": "string",
+	  "defaultValue": "uksouth_vnet1"
     },
     "SubnetName": {
-      "type": "string"
+      "type": "string",
+	  "defaultValue": "uksouth_subnet1"
+	  
     },
     "ProfilePath": {
-      "type": "string"
+      "type": "string",
+	  "defaultValue": "\\\\domain.local\\Profile\\FSLogix"
     },
     "RegistrationToken": {
-      "type": "string"
+      "type": "string",
+	   "defaultValue": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjQyRURFMjE4OERDMUYxMzk5QUJFNDREQTJGNzE1RDU0NDlEMjNBOUYiLCJ0eXAiOiJKV1QifQ.eyJSZWdpc3RyYXRpb25JZCI6IjFkMzcxNWNjLTA3MzgtNDQ1Yy1iNzNmLTc5OTI2ZTZhMjI4MiIsIkJyb2tlclVyaSI6Imh0dHBzOi8vcmRicm9rZXItZy1nYi1yMC53dmQubWljcm9zb2Z0LmNvbS8iLCJEaWFnbm9zdGljc1VyaSI6Imh0dHBzOi8vcmRkaWFnbm9zdGljcy1nLWdiLXIwLnd2ZC5taWNyb3NvZnQuY29tLyIsIkVuZHBvaW50UG9vbElkIjoiMDUxNWU5YjMtNjMzNi00YzdhLWIyOTMtMTdkYmE2N2Y5ZTk2IiwiR2xvYmFsQnJva2VyVXJpIjoiaHR0cHM6Ly9yZGJyb2tlci53dmQubWljcm9zb2Z0LmNvbS8iLCJHZW9ncmFwaHkiOiJHQiIsIkdsb2JhbEJyb2tlclJlc291cmNlSWRVcmkiOiJodHRwczovLzA1MTVlOWIzLTYzMzYtNGM3YS1iMjkzLTE3ZGJhNjdmOWU5Ni5yZGJyb2tlci53dmQubWljcm9zb2Z0LmNvbS8iLCJCcm9rZXJSZXNvdXJjZUlkVXJpIjoiaHR0cHM6Ly8wNTE1ZTliMy02MzM2LTRjN2EtYjI5My0xN2RiYTY3ZjllOTYucmRicm9rZXItZy1nYi1yMC53dmQubWljcm9zb2Z0LmNvbS8iLCJEaWFnbm9zdGljc1Jlc291cmNlSWRVcmkiOiJodHRwczovLzA1MTVlOWIzLTYzMzYtNGM3YS1iMjkzLTE3ZGJhNjdmOWU5Ni5yZGRpYWdub3N0aWNzLWctZ2ItcjAud3ZkLm1pY3Jvc29mdC5jb20vIiwiQUFEVGVuYW50SWQiOiJmZDZjNDIxZC05NWQ1LTRjOTItODg3MS0xZGNjM2I2ZmIzYTgiLCJuYmYiOjE3MDEyNDU3NjAsImV4cCI6MTcwMTMzMjE1MSwiaXNzIjoiUkRJbmZyYVRva2VuTWFuYWdlciIsImF1ZCI6IlJEbWkifQ.RuLzB_SlSpVEv0fMxQMBLAph85duQ6mpfHNn_90f1hgpQ0r-bj1Rorw-w3Ut1vIN-94I7Xniffd6U2TehR96tpL9vGtfYPUo9dN577GNc5xMbxgJ1g7_EWMgpbVdEwi5UpTXJKbvLiUOYY5VXOzLxzRnDM_DKGsXM6pJERvjQxJeA4IdfXY2DCArCymfxgXnoz7acNyGhRKiDk9vsWpe84A4eH3c34tGYb1oPY5UYpUeduOmPG8Q8Z6CrC5St00ZqQWxQvuQYOVSPttmuLE_hJQUVoA_5upaMMYtIDUcPEDpxFaG-uqNIyWbpGDk-NxvGeMgQBeRJUJaXvpl8N5eaw"
     }
   },
   "variables": {
