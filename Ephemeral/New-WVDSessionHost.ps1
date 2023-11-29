@@ -117,7 +117,7 @@ Add-Content -LiteralPath C:\New-WVDSessionHost.log "Downloading WVD Agent"
 ##############################
 #    Prep for WVD Install    #
 ##############################
-Add-Content -LiteralPath C:\New-WVDSessionHost.log "Unzip FSLogix"
+<#Add-Content -LiteralPath C:\New-WVDSessionHost.log "Unzip FSLogix"
 Expand-Archive `
     -LiteralPath "C:\temp\wvd\$FSInstaller" `
     -DestinationPath "$LocalWVDpath\FSLogix" `
@@ -126,7 +126,7 @@ Expand-Archive `
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 cd $LocalWVDpath 
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "UnZip FXLogix Complete"
-
+#>
 
 ##############################
 #    OS Specific Settings    #
@@ -249,7 +249,6 @@ $fslogix_deploy_status = Start-Process `
     -ArgumentList "/install /quiet" `
     -Wait `
     -Passthru
-#>
 
 #######################################
 #    FSLogix User Profile Settings    #
@@ -313,6 +312,7 @@ Set-ItemProperty `
     -Type DWord `
     -Value 1
 Pop-Location
+#>
 
 
 ##########################################
