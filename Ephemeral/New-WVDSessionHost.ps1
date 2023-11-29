@@ -346,7 +346,7 @@ New-Item `
     -Force
 Pop-Location
 
-
+<#
 ##############################################
 #    WVD Optimizer (Virtual Desktop Team)    #
 ##############################################
@@ -390,6 +390,8 @@ else {
     Write-Output "Optimize not selected"
     Add-Content -LiteralPath C:\New-WVDSessionHost.log "Optimize NOT selected"    
 }
+#>
+
 
 
 ##########################
