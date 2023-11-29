@@ -27,7 +27,6 @@
 #
 #>
 
-
 ##############################
 #    WVD Script Parameters   #
 ##############################
@@ -102,6 +101,7 @@ RegistrationToken = $RegistrationToken
 Optimize          = $Optimize
 "
 
+Start-Transcript -Path "C:\temo\transcript.txt" -NoClobber
 
 #################################
 #    Download WVD Componants    #
@@ -388,11 +388,11 @@ else {
     Write-Output "Optimize not selected"
     Add-Content -LiteralPath C:\New-WVDSessionHost.log "Optimize NOT selected"    
 }
-
-
+#>
+Stop-Transcript
 ##########################
 #    Restart Computer    #
 ##########################
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Process Complete - REBOOT"
 Restart-Computer -Force 
-#>
+
