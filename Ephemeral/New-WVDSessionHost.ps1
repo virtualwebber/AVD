@@ -117,7 +117,7 @@ Add-Content -LiteralPath C:\New-WVDSessionHost.log "Downloading WVD Agent"
 ##############################
 #    Prep for WVD Install    #
 ##############################
-<#Add-Content -LiteralPath C:\New-WVDSessionHost.log "Unzip FSLogix"
+Add-Content -LiteralPath C:\New-WVDSessionHost.log "Unzip FSLogix"
 Expand-Archive `
     -LiteralPath "C:\temp\wvd\$FSInstaller" `
     -DestinationPath "$LocalWVDpath\FSLogix" `
@@ -126,7 +126,6 @@ Expand-Archive `
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 cd $LocalWVDpath 
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "UnZip FXLogix Complete"
-#>
 
 ##############################
 #    OS Specific Settings    #
@@ -238,7 +237,6 @@ $agent_deploy_status = Start-Process `
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "WVD Agent Install Complete"
 Wait-Event -Timeout 5
 
-
 <#
 #########################
 #    FSLogix Install    #
@@ -312,7 +310,7 @@ Set-ItemProperty `
     -Type DWord `
     -Value 1
 Pop-Location
-#>
+
 
 
 ##########################################
@@ -345,7 +343,7 @@ New-Item `
     -Name AADJPrivate `
     -Force
 Pop-Location
-
+#>
 <#
 ##############################################
 #    WVD Optimizer (Virtual Desktop Team)    #
@@ -390,10 +388,11 @@ else {
     Write-Output "Optimize not selected"
     Add-Content -LiteralPath C:\New-WVDSessionHost.log "Optimize NOT selected"    
 }
-#>
+
 
 ##########################
 #    Restart Computer    #
 ##########################
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Process Complete - REBOOT"
 Restart-Computer -Force 
+#>
