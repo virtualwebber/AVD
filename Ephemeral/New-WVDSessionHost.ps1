@@ -204,7 +204,7 @@ Else {
     }
 }
 
-
+<#
 ################################
 #    Install WVD Componants    #
 ################################
@@ -237,6 +237,7 @@ $agent_deploy_status = Start-Process `
     -Passthru
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "WVD Agent Install Complete"
 Wait-Event -Timeout 5
+#>
 
 
 <#
@@ -393,9 +394,10 @@ else {
 #>
 
 
-
+<#
 ##########################
 #    Restart Computer    #
 ##########################
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Process Complete - REBOOT"
 Restart-Computer -Force 
+#>
