@@ -207,6 +207,19 @@ $agent_deploy_status = Start-Process `
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "WVD Agent Install Complete"
 Wait-Event -Timeout 5
 Start-Sleep -Seconds 30
+Write-Output "Installing RD Infra Agent on VM $AgentInstaller`n"
+$agent_deploy_status = Start-Process `
+    -FilePath "msiexec.exe" `
+    -ArgumentList "/i $WVDAgentInstaller", `
+        "/quiet", `
+        "/qn", `
+        "/norestart", `
+        "/passive", `
+        "REGISTRATIONTOKEN=$RegistrationToken", "/l* $LocalWVDpath\AgentInstall.txt" `
+    -Wait `
+    -Passthru
+Add-Content -LiteralPath C:\New-WVDSessionHost.log "WVD Agent Install Complete"
+Wait-Event -Timeout 5
 <#
 #########################
 #    FSLogix Install    #
