@@ -37,7 +37,7 @@ Param (
     [Parameter(Mandatory=$true)]
         [string]$RegistrationToken,
     [Parameter(Mandatory=$false)]
-        [string]$Optimize = $true           
+        [string]$Optimize = $false           
 )
 
 
