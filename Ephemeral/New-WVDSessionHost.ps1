@@ -47,8 +47,8 @@ Param (
 $LocalWVDpath            = "c:\temp\wvd\"
 $WVDBootURI              = 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH'
 $WVDAgentURI             = 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'
-$FSLogixURI              = 'https://aka.ms/fslogix_download'
-$FSInstaller             = 'FSLogixAppsSetup.zip'
+#$FSLogixURI              = 'https://aka.ms/fslogix_download'
+#$FSInstaller             = 'FSLogixAppsSetup.zip'
 $WVDAgentInstaller       = 'WVD-Agent.msi'
 $WVDBootInstaller        = 'WVD-Bootloader.msi'
 $Optimizations           = "All"
@@ -206,94 +206,9 @@ $agent_deploy_status = Start-Process `
     -Passthru
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "WVD Agent Install Complete"
 Wait-Event -Timeout 5
-Start-Sleep -Seconds 30
-Write-Output "Installing RD Infra Agent on VM $AgentInstaller`n"
-$agent_deploy_status = Start-Process `
-    -FilePath "msiexec.exe" `
-    -ArgumentList "/i $WVDAgentInstaller", `
-        "/quiet", `
-        "/qn", `
-        "/norestart", `
-        "/passive", `
-        "REGISTRATIONTOKEN=$RegistrationToken", "/l* $LocalWVDpath\AgentInstall.txt" `
-    -Wait `
-    -Passthru
-Add-Content -LiteralPath C:\New-WVDSessionHost.log "WVD Agent Install Complete"
-Wait-Event -Timeout 5
-<#
-#########################
-#    FSLogix Install    #
-#########################
-Add-Content -LiteralPath C:\New-WVDSessionHost.log "Installing FSLogix"
-$fslogix_deploy_status = Start-Process `
-    -FilePath "$LocalWVDpath\FSLogix\x64\Release\FSLogixAppsSetup.exe" `
-    -ArgumentList "/install /quiet" `
-    -Wait `
-    -Passthru
 
-#######################################
-#    FSLogix User Profile Settings    #
-#######################################
-Add-Content -LiteralPath C:\New-WVDSessionHost.log "Configure FSLogix Profile Settings"
-Push-Location 
-Set-Location HKLM:\SOFTWARE\
-New-Item `
-    -Path HKLM:\SOFTWARE\FSLogix `
-    -Name Profiles `
-    -Value "" `
-    -Force
-New-Item `
-    -Path HKLM:\Software\FSLogix\Profiles\ `
-    -Name Apps `
-    -Force
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "Enabled" `
-    -Type "Dword" `
-    -Value "1"
-New-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "CCDLocations" `
-    -Value "type=smb,connectionString=$ProfilePath" `
-    -PropertyType MultiString `
-    -Force
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "SizeInMBs" `
-    -Type "Dword" `
-    -Value "30000"
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "IsDynamic" `
-    -Type "Dword" `
-    -Value "1"
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "VolumeType" `
-    -Type String `
-    -Value "vhdx"
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "FlipFlopProfileDirectoryName" `
-    -Type "Dword" `
-    -Value "1" 
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "SIDDirNamePattern" `
-    -Type String `
-    -Value "%username%%sid%"
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name "SIDDirNameMatch" `
-    -Type String `
-    -Value "%username%%sid%"
-Set-ItemProperty `
-    -Path HKLM:\Software\FSLogix\Profiles `
-    -Name DeleteLocalProfileWhenVHDShouldApply `
-    -Type DWord `
-    -Value 1
-Pop-Location
-#>
+<#
+
 
 ##########################################
 #    Enable Screen Capture Protection    #
