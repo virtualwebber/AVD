@@ -37,7 +37,7 @@ Param (
     [Parameter(Mandatory=$true)]
         [string]$RegistrationToken,
     [Parameter(Mandatory=$false)]
-        [string]$Optimize = $false           
+        [string]$Optimize = $true           
 )
 
 
@@ -47,10 +47,16 @@ Param (
 $LocalWVDpath            = "c:\temp\wvd\"
 $WVDBootURI              = 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrxrH'
 $WVDAgentURI             = 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RWrmXv'
-#$FSLogixURI              = 'https://aka.ms/fslogix_download'
-#$FSInstaller             = 'FSLogixAppsSetup.zip'
+$FSLogixURI              = 'https://aka.ms/fslogix_download'
+$FSInstaller             = 'FSLogixAppsSetup.zip'
 $WVDAgentInstaller       = 'WVD-Agent.msi'
 $WVDBootInstaller        = 'WVD-Bootloader.msi'
+$Win7x64_UpdateURI       = 'https://download.microsoft.com/download/A/F/5/AF5C565C-9771-4BFB-973B-4094C1F58646/Windows6.1-KB2592687-x64.msu'                                        
+$Win7x64_WMI5URI         = 'https://download.microsoft.com/download/6/F/5/6F5FF66C-6775-42B0-86C4-47D41F2DA187/Win7AndW2K8R2-KB3191566-x64.zip'
+$Win7x64_UpdateInstaller = 'Win7-KB2592687-x64.msu'
+$Win7x64_WMI5Installer   = 'Win7-KB3191566-WMI5-x64.zip'
+$Win7x64_WVDAgent        = 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RE3JZCm'
+$Win7x64_WVDBootMgrURI   = 'https://query.prod.cms.rt.microsoft.com/cms/api/am/binary/RE3K2e3'
 $Optimizations           = "All"
 
 
@@ -102,8 +108,8 @@ Optimize          = $Optimize
 #################################
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Downloading WVD Boot Loader"
     Invoke-WebRequest -Uri $WVDBootURI -OutFile "$LocalWVDpath$WVDBootInstaller"
-#Add-Content -LiteralPath C:\New-WVDSessionHost.log "Downloading FSLogix"
-#    Invoke-WebRequest -Uri $FSLogixURI -OutFile "$LocalWVDpath$FSInstaller"
+Add-Content -LiteralPath C:\New-WVDSessionHost.log "Downloading FSLogix"
+    Invoke-WebRequest -Uri $FSLogixURI -OutFile "$LocalWVDpath$FSInstaller"
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Downloading WVD Agent"
     Invoke-WebRequest -Uri $WVDAgentURI -OutFile "$LocalWVDpath$WVDAgentInstaller"
 
@@ -111,7 +117,6 @@ Add-Content -LiteralPath C:\New-WVDSessionHost.log "Downloading WVD Agent"
 ##############################
 #    Prep for WVD Install    #
 ##############################
-<#
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Unzip FSLogix"
 Expand-Archive `
     -LiteralPath "C:\temp\wvd\$FSInstaller" `
@@ -121,7 +126,7 @@ Expand-Archive `
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 cd $LocalWVDpath 
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "UnZip FXLogix Complete"
-#>
+
 
 ##############################
 #    OS Specific Settings    #
@@ -166,6 +171,35 @@ Else {
                 -BackgroundColor Black `
                 "Windows 7 x64 detected"
             Add-Content -LiteralPath C:\New-WVDSessionHost.log "Windows 7 x64 Detected"
+
+
+            #################################
+            #    Begin Win7x64 downloads    #
+            #################################
+            $Win7x64_WinUpdateRequest = [System.Net.WebRequest]::Create($Win7x64_UpdateURI)
+            $Win7x64_WMI5Request      = [System.Net.WebRequest]::Create($Win7x64_WMI5URI)            
+            $Win7x64_WVDAgentRequest  = [System.Net.WebRequest]::Create($Win7x64_WVDAgentURI)
+            $Win7x64_WVDBootRequest   = [System.Net.WebRequest]::Create($Win7x64_WVDBootMgrURI)
+
+
+            ################################
+            #    Begin Win7x64 Installs    #
+            ################################
+            write-host `
+                -ForegroundColor Magenta `
+                -BackgroundColor Black `
+                "...installing Update KB2592687 for x64"
+            Expand-Archive `
+                -LiteralPath "C:\temp\wvd\$Win7x64_WMI5Installer" `
+                -DestinationPath "$LocalWVDpath\Win7Wmi5x64" `
+                -Force `
+                -Verbose
+            $packageName = 'Win7AndW2K8R2-KB3191566-x64.msu'
+            $packagePath = 'C:\temp\wvd\Win7Wmi5x64'
+            $wusaExe = "$env:windir\system32\wusa.exe"
+            $wusaParameters += @("/quiet", "/promptrestart")
+            $wusaParameterString = $wusaParameters -join " "
+            & $wusaExe $wusaParameterString
         }        
     }
 }
@@ -190,9 +224,6 @@ Add-Content -LiteralPath C:\New-WVDSessionHost.log "Installing WVD Bootloader Co
 Write-Output "Installing RDAgentBootLoader on VM Complete. Exit code=$sts`n"
 Wait-Event -Timeout 5
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Installing WVD Agent"
-Start-Sleep -Seconds 30
-
-
 Write-Output "Installing RD Infra Agent on VM $AgentInstaller`n"
 $agent_deploy_status = Start-Process `
     -FilePath "msiexec.exe" `
@@ -207,7 +238,81 @@ $agent_deploy_status = Start-Process `
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "WVD Agent Install Complete"
 Wait-Event -Timeout 5
 
+
 <#
+#########################
+#    FSLogix Install    #
+#########################
+Add-Content -LiteralPath C:\New-WVDSessionHost.log "Installing FSLogix"
+$fslogix_deploy_status = Start-Process `
+    -FilePath "$LocalWVDpath\FSLogix\x64\Release\FSLogixAppsSetup.exe" `
+    -ArgumentList "/install /quiet" `
+    -Wait `
+    -Passthru
+#>
+
+#######################################
+#    FSLogix User Profile Settings    #
+#######################################
+Add-Content -LiteralPath C:\New-WVDSessionHost.log "Configure FSLogix Profile Settings"
+Push-Location 
+Set-Location HKLM:\SOFTWARE\
+New-Item `
+    -Path HKLM:\SOFTWARE\FSLogix `
+    -Name Profiles `
+    -Value "" `
+    -Force
+New-Item `
+    -Path HKLM:\Software\FSLogix\Profiles\ `
+    -Name Apps `
+    -Force
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "Enabled" `
+    -Type "Dword" `
+    -Value "1"
+New-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "CCDLocations" `
+    -Value "type=smb,connectionString=$ProfilePath" `
+    -PropertyType MultiString `
+    -Force
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "SizeInMBs" `
+    -Type "Dword" `
+    -Value "30000"
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "IsDynamic" `
+    -Type "Dword" `
+    -Value "1"
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "VolumeType" `
+    -Type String `
+    -Value "vhdx"
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "FlipFlopProfileDirectoryName" `
+    -Type "Dword" `
+    -Value "1" 
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "SIDDirNamePattern" `
+    -Type String `
+    -Value "%username%%sid%"
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name "SIDDirNameMatch" `
+    -Type String `
+    -Value "%username%%sid%"
+Set-ItemProperty `
+    -Path HKLM:\Software\FSLogix\Profiles `
+    -Name DeleteLocalProfileWhenVHDShouldApply `
+    -Type DWord `
+    -Value 1
+Pop-Location
 
 
 ##########################################
@@ -287,11 +392,8 @@ else {
 }
 #>
 
-
-<#
 ##########################
 #    Restart Computer    #
 ##########################
 Add-Content -LiteralPath C:\New-WVDSessionHost.log "Process Complete - REBOOT"
 Restart-Computer -Force 
-#>
