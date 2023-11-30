@@ -97,7 +97,7 @@
       },
       "Multi": {
         "License": "Windows_Client"
-      },
+      }
     },  
     "VMName": "[concat(parameters('Prefix'),'-VM-')]",
     "subnetRef": "[concat(subscription().id,'/resourceGroups/',parameters('VnetRgName'),'/providers/Microsoft.Network/virtualNetworks/', parameters('VnetName'),'/subnets/', parameters('subnetName'))]",
