@@ -20,6 +20,15 @@
     "VMSize": {
       "value": "Small"
     },
+	"securityType": {
+            "value": "TrustedLaunch"
+    },
+        "secureBoot": {
+            "value": true
+    },
+        "vTPM": {
+            "value": true
+    },
     "ProfilePath": {
       "value": "\\\\MSAzureAcademy.com\\CorpShares\\FSLogix"
     },
