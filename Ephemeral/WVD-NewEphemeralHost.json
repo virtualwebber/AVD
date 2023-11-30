@@ -196,7 +196,7 @@
                     "uefiSettings": {
                         "secureBootEnabled": "[parameters('secureBoot')]",
                         "vTpmEnabled": "[parameters('vTPM')]"
-                    }
+                    },
         "licenseType": "[variables('License')[parameters('OperatingSystem')].License]"
       },
       "zones": [
