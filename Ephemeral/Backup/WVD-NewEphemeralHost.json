@@ -108,7 +108,6 @@
     "firstFileNameBreakString": "[split(variables('firstFileNameString'), '?')]",
     "firstFileName": "[variables('firstFileNameBreakString')[0]]",
     "Arguments": "[string(concat('-ProfilePath ', parameters('ProfilePath'), ' -RegistrationToken ', parameters('RegistrationToken')))]"
-	
   },
   "resources": [
     {
@@ -121,8 +120,8 @@
         "count": "[parameters('Instance')]"
       },
       "tags": {
-        "costcode": "Cost",
-        "displayName": "Lab-Nic"
+        "costcode": "AA-Money",
+        "displayName": "WVD-Nic"
       },
       "properties": {
         "ipConfigurations": [
@@ -152,8 +151,8 @@
         "count": "[parameters('Instance')]"
       },
       "tags": {
-        "costcode": "Cost",
-        "displayName": "Lab-VM"
+        "costcode": "AA-Money",
+        "displayName": "WVD-VM"
       },
       "properties": {
         "hardwareProfile": {
@@ -172,8 +171,11 @@
                 }
             },
             "imageReference": {
-                        "id": "/subscriptions/d71d6a4a-72e6-475f-acaa-b3fa41c2c21b/resourceGroups/AVD_CustomImages/providers/Microsoft.Compute/galleries/acg_avd_customimages/images/avdcustom1"
-                    }
+                "publisher": "[variables('VM_IMAGES')[parameters('OperatingSystem')].publisher]",
+                "offer": "[variables('VM_Images')[parameters('OperatingSystem')].offer]",
+                "sku": "[variables('VM_Images')[parameters('OperatingSystem')].sku]",
+                "version": "[variables('VM_Images')[parameters('OperatingSystem')].version]"
+            }
         },
         "networkProfile": {
           "networkInterfaces": [
