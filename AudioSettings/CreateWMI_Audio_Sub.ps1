@@ -18,7 +18,7 @@ $filterName   = "AudioDeviceArrival"
 $consumerName = "AudioDeviceArrivalConsumer"
 $scriptPath   = "C:\_source\Set-AudioDeviceSettings.ps1"
 $logDir       = "C:\_source\logs"
-$logShare     = "\\cukavdukwprod01.file.core.windows.net\profiles\fslogixrules\Logs"
+$logShare     = "\\fileserver.domain.com\logs\audio"
 $logName      = "${env:COMPUTERNAME}_AudioWMISubscription_$(Get-Date -Format 'yyyyMMdd').log"
 $logFile      = Join-Path $logDir $logName
 
