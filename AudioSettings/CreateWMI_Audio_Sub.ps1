@@ -11,7 +11,7 @@
 
 $filterName   = "AudioDeviceArrival"
 $consumerName = "AudioDeviceArrivalConsumer"
-$scriptPath   = "C:\_source\scripts\Set-AudioDeviceSettings.ps1"
+$scriptPath   = "C:\_source\Set-AudioDeviceSettings.ps1"
 
 # Remove any existing subscription to avoid duplicates
 Get-WmiObject -Namespace "root\subscription" -Class "__FilterToConsumerBinding" -ErrorAction SilentlyContinue |
