@@ -16,7 +16,7 @@
 $renderPath  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
 $capturePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
 $logDir      = "C:\_source\logs"
-$logShare    = "\\cukavdukwprod01.file.core.windows.net\profiles\fslogixrules\Logs"
+$logShare    = "\\fileserver.domain.com\logs\audio"
 $logName     = "${env:COMPUTERNAME}_AudioRegistryPermissions_$(Get-Date -Format 'yyyyMMdd').log"
 $logFile     = Join-Path $logDir $logName
 
