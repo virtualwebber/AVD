@@ -16,7 +16,9 @@
 $renderPath  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
 $capturePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
 $logDir      = "C:\_source\logs"
-$logFile     = Join-Path $logDir "AudioRegistryPermissions_$(Get-Date -Format 'yyyyMMdd').log"
+$logShare    = "\\cukavdukwprod01.file.core.windows.net\profiles\fslogixrules\Logs"
+$logName     = "${env:COMPUTERNAME}_AudioRegistryPermissions_$(Get-Date -Format 'yyyyMMdd').log"
+$logFile     = Join-Path $logDir $logName
 
 # ============================================================
 # P/INVOKE — PRIVILEGE ESCALATION
@@ -81,6 +83,17 @@ function Write-Log {
     }
     $entry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [$Level] $Message"
     Add-Content -Path $logFile -Value $entry
+    if ($logShare) {
+        try {
+            if (-not (Test-Path $logShare)) {
+                New-Item -ItemType Directory -Path $logShare -Force | Out-Null
+            }
+            Add-Content -Path (Join-Path $logShare $logName) -Value $entry
+        }
+        catch {
+            # Silently skip if the share is unreachable
+        }
+    }
     Write-Host $entry
 }
 

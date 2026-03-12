@@ -18,7 +18,9 @@ $filterName   = "AudioDeviceArrival"
 $consumerName = "AudioDeviceArrivalConsumer"
 $scriptPath   = "C:\_source\Set-AudioDeviceSettings.ps1"
 $logDir       = "C:\_source\logs"
-$logFile      = Join-Path $logDir "AudioWMISubscription_$(Get-Date -Format 'yyyyMMdd').log"
+$logShare     = "\\cukavdukwprod01.file.core.windows.net\profiles\fslogixrules\Logs"
+$logName      = "${env:COMPUTERNAME}_AudioWMISubscription_$(Get-Date -Format 'yyyyMMdd').log"
+$logFile      = Join-Path $logDir $logName
 
 # ============================================================
 # FUNCTIONS
@@ -31,6 +33,17 @@ function Write-Log {
     }
     $entry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [$Level] $Message"
     Add-Content -Path $logFile -Value $entry
+    if ($logShare) {
+        try {
+            if (-not (Test-Path $logShare)) {
+                New-Item -ItemType Directory -Path $logShare -Force | Out-Null
+            }
+            Add-Content -Path (Join-Path $logShare $logName) -Value $entry
+        }
+        catch {
+            # Silently skip if the share is unreachable
+        }
+    }
     Write-Host $entry
 }
 
