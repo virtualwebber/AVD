@@ -14,7 +14,7 @@
 $filterName   = "AudioDeviceArrival"
 $consumerName = "AudioDeviceArrivalConsumer"
 $logDir       = "C:\_source\logs"
-$logFile      = Join-Path $logDir "AudioWMISubscription_$(Get-Date -Format 'yyyyMMdd').log"
+$logFile      = Join-Path $logDir "AudioWMISubscriptionRemoval_$(Get-Date -Format 'yyyyMMdd').log"
 
 # ============================================================
 # FUNCTIONS
