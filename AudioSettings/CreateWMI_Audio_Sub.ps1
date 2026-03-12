@@ -56,23 +56,34 @@ Write-Log "WMI subscription registration started"
 Write-Log "Running as: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
 Write-Log "========================================"
 
-# Remove any existing subscription to avoid duplicates
-Write-Log "Removing any existing subscription components..."
+# Clean slate — remove ALL existing subscription components to avoid orphans
+Write-Log "Cleaning existing subscription components..."
 
 Get-WmiObject -Namespace "root\subscription" -Class "__FilterToConsumerBinding" -ErrorAction SilentlyContinue |
     Where-Object { $_.Filter -like "*$filterName*" } |
-    Remove-WmiObject
+    ForEach-Object { $_ | Remove-WmiObject -ErrorAction SilentlyContinue }
 Write-Log "  Cleared existing bindings"
 
-Get-WmiObject -Namespace "root\subscription" -Class "__EventFilter" |
+Get-WmiObject -Namespace "root\subscription" -Class "CommandLineEventConsumer" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -eq $consumerName } |
+    ForEach-Object { $_ | Remove-WmiObject -ErrorAction SilentlyContinue }
+Write-Log "  Cleared existing consumers"
+
+Get-WmiObject -Namespace "root\subscription" -Class "__EventFilter" -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -eq $filterName } |
-    Remove-WmiObject
+    ForEach-Object { $_ | Remove-WmiObject -ErrorAction SilentlyContinue }
 Write-Log "  Cleared existing filters"
 
-Get-WmiObject -Namespace "root\subscription" -Class "CommandLineEventConsumer" |
-    Where-Object { $_.Name -eq $consumerName } |
-    Remove-WmiObject
-Write-Log "  Cleared existing consumers"
+# Verify clean slate
+$staleFilter   = Get-WmiObject -Namespace "root\subscription" -Class "__EventFilter" -ErrorAction SilentlyContinue |
+                 Where-Object { $_.Name -eq $filterName }
+$staleConsumer = Get-WmiObject -Namespace "root\subscription" -Class "CommandLineEventConsumer" -ErrorAction SilentlyContinue |
+                 Where-Object { $_.Name -eq $consumerName }
+if ($staleFilter -or $staleConsumer) {
+    Write-Log "Stale components remain after cleanup -- check permissions" -Level "WARN"
+} else {
+    Write-Log "  Clean slate verified"
+}
 
 # 1. Event filter — fires when a new AudioEndpoint PnP device is created
 Write-Log "Creating event filter: $filterName"
