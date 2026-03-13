@@ -36,9 +36,9 @@ function Write-Log {
     if ($logShare) {
         try {
             if (-not (Test-Path $logShare)) {
-                New-Item -ItemType Directory -Path $logShare -Force | Out-Null
+                New-Item -ItemType Directory -Path $logShare -Force -ErrorAction Stop | Out-Null
             }
-            Add-Content -Path (Join-Path $logShare $logName) -Value $entry
+            Add-Content -Path (Join-Path $logShare $logName) -Value $entry -ErrorAction Stop
         }
         catch {
             # Silently skip if the share is unreachable
