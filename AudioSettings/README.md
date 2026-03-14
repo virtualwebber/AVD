@@ -1,10 +1,10 @@
 # AVD Audio Settings
 
-PowerShell scripts for automatically configuring audio device settings on Azure Virtual Desktop (AVD) session hosts. Designed for environments using USB passthrough with Alvaria contact centre software, ensuring USB headsets (e.g. Plantronics Blackwire 325.1) are always configured correctly without manual intervention.
+PowerShell scripts for automatically configuring audio device settings on Azure Virtual Desktop (AVD) session hosts. Designed for environments using USB passthrough, ensuring USB headsets (e.g. Plantronics Blackwire 325.1) are always configured correctly without manual intervention.
 
 ## What it does
 
-When a USB headset is connected via AVD USB passthrough, the audio enhancements are automatically disabled on all audio endpoints (both render and capture). This prevents audio quality issues with contact centre software.
+When a USB headset is connected via AVD USB passthrough, the audio enhancements are automatically disabled on all audio endpoints (both render and capture). This prevents audio quality issues caused by Windows audio enhancements being enabled by default on device arrival.
 
 ## Scripts
 

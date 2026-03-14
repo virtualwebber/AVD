@@ -3,9 +3,8 @@
     Disables audio enhancements for all MMDevice audio endpoints.
 
 .DESCRIPTION
-    Intended to be called by a WMI permanent event subscription on AudioEndpoint device arrival,
-    ensuring USB headsets used by Alvaria contact centre software are always configured correctly
-    without requiring manual intervention.
+    Intended to be called by a scheduled task or WMI event subscription on device arrival,
+    ensuring USB headsets are always configured correctly without requiring manual intervention.
 
     Can also be run manually, elevated, for testing or one-off remediation.
 
