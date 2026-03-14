@@ -81,14 +81,16 @@ $action = New-ScheduledTaskAction `
 
 # Trigger on Event ID 112 from DeviceSetupManager — fires when a device
 # container has been fully serviced and properties written to the registry.
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$triggerXml = @"
+$triggerClass = Get-CimClass -ClassName "MSFT_TaskEventTrigger" -Namespace "Root/Microsoft/Windows/TaskScheduler"
+$trigger = New-CimInstance -CimClass $triggerClass -ClientOnly
+$trigger.Subscription = @"
 <QueryList>
   <Query Id="0" Path="Microsoft-Windows-DeviceSetupManager/Admin">
     <Select Path="Microsoft-Windows-DeviceSetupManager/Admin">*[System[EventID=112]]</Select>
   </Query>
 </QueryList>
 "@
+$trigger.Enabled = $true
 
 $principal = New-ScheduledTaskPrincipal `
     -UserId "SYSTEM" `
@@ -101,35 +103,14 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances Queue `
     -StartWhenAvailable
 
-# Register with a placeholder trigger, then update with the event trigger via XML
-$task = Register-ScheduledTask `
+Register-ScheduledTask `
     -TaskName $taskName `
     -Action $action `
     -Trigger $trigger `
     -Principal $principal `
     -Settings $settings `
     -Description "Configures audio device settings when a new device is installed (Event ID 112)" `
-    -Force
-
-# Replace the placeholder trigger with the event-based trigger
-$taskDef = $task | Get-ScheduledTask
-$eventTrigger = New-Object -ComObject "Schedule.Service"
-$eventTrigger.Connect()
-$folder   = $eventTrigger.GetFolder("\")
-$taskObj  = $folder.GetTask($taskName)
-$taskXml  = $taskObj.Xml
-
-# Inject the event trigger XML
-$taskXml = $taskXml -replace '(?s)<Triggers>.*?</Triggers>', @"
-<Triggers>
-  <EventTrigger>
-    <Enabled>true</Enabled>
-    <Subscription>$triggerXml</Subscription>
-  </EventTrigger>
-</Triggers>
-"@
-
-$folder.RegisterTask($taskName, $taskXml, 6, $null, $null, 5) | Out-Null
+    -Force | Out-Null
 
 # Verify
 $verifyTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
