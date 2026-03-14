@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
     Registers a scheduled task to run Set-AudioDeviceSettings.ps1 on device arrival.
+
 .DESCRIPTION
     Creates a scheduled task triggered by Event ID 112 from the
     Microsoft-Windows-DeviceSetupManager/Admin log. This event fires whenever a
@@ -8,12 +9,29 @@
     USB passthrough), at which point the device properties are written to the
     MMDevices registry and ready to be configured.
 
-    This replaces the WMI permanent subscription approach in environments where
-    CommandLineEventConsumer is blocked by security policy (e.g. ASR rules).
+    WHY EVENT ID 112?
+        When a USB device is connected (physically or via AVD USB passthrough),
+        Windows Device Setup Manager (DSM) handles driver installation and
+        property configuration. Event ID 112 is logged when DSM has finished
+        servicing the device container — meaning all drivers are loaded and
+        the device's registry entries (including MMDevices Audio) are populated.
+        This is the ideal moment to apply our audio settings.
+
+    WHY NOT WMI PERMANENT SUBSCRIPTIONS?
+        The original approach used a WMI permanent event subscription with a
+        CommandLineEventConsumer. This works in environments without security
+        restrictions, but many enterprise environments block CommandLineEventConsumer
+        via Attack Surface Reduction (ASR) rules (specifically rule
+        d1e49aac-8f56-4280-b9ba-993a6d77406c — "Block process creations originating
+        from PSExec and WMI commands"). The scheduled task approach avoids this
+        restriction entirely. CreateWMI_Audio_Sub.ps1 remains in the repo for
+        environments where WMI subscriptions are allowed.
+
 .NOTES
     Author:  andrew.webber@ultima.com
     Version: 1.0.0
     Run once, elevated, during image build or on first boot.
+    The task survives reboots and runs as SYSTEM.
     Log:     C:\_source\logs\RegisterAudioTask_yyyyMMdd.log  (daily rolling)
 #>
 
@@ -21,10 +39,21 @@
 # CONFIGURATION
 # ============================================================
 
+# Name of the scheduled task as it appears in Task Scheduler
 $taskName   = "AudioDeviceSettings"
+
+# Path to the script that configures audio device settings (disable enhancements).
+# This is what the scheduled task will execute when a device arrival event fires.
 $scriptPath = "C:\_source\Set-AudioDeviceSettings.ps1"
+
+# Local log directory — always written to
 $logDir     = "C:\_source\logs"
+
+# Optional UNC file share for centralised logging.
+# Set to $null or "" to disable file share logging.
 $logShare   = "\\fileserver.domain.com\logs\audio"
+
+# Log file name includes computername for multi-host identification
 $logName    = "${env:COMPUTERNAME}_RegisterAudioTask_$(Get-Date -Format 'yyyyMMdd').log"
 $logFile    = Join-Path $logDir $logName
 
@@ -33,12 +62,28 @@ $logFile    = Join-Path $logDir $logName
 # ============================================================
 
 function Write-Log {
+    <#
+    .SYNOPSIS
+        Writes a timestamped log entry to local file, optional file share, and console.
+    .DESCRIPTION
+        Logs are written to the local $logDir first (always), then optionally to
+        $logShare if configured. If the share is unreachable, the error is silently
+        caught so the script continues without interruption.
+    #>
     param([string]$Message, [string]$Level = "INFO")
+
+    # Ensure the local log directory exists
     if (-not (Test-Path $logDir)) {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     }
+
+    # Format: [timestamp] [LEVEL] message
     $entry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [$Level] $Message"
+
+    # Always write to local log file
     Add-Content -Path $logFile -Value $entry
+
+    # Optionally write to file share — silently skip if unreachable
     if ($logShare) {
         try {
             if (-not (Test-Path $logShare)) {
@@ -50,6 +95,8 @@ function Write-Log {
             # Silently skip if the share is unreachable
         }
     }
+
+    # Also output to console for interactive use
     Write-Host $entry
 }
 
@@ -62,7 +109,11 @@ Write-Log "Scheduled task registration started"
 Write-Log "Running as: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
 Write-Log "========================================"
 
-# Remove existing task if present
+# ----------------------------------------------------------
+# STEP 1: Clean up any existing task with the same name.
+# This ensures a fresh registration every time, avoiding
+# stale triggers or misconfigured actions from previous runs.
+# ----------------------------------------------------------
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existing) {
     Write-Log "Removing existing task: $taskName"
@@ -72,15 +123,23 @@ if ($existing) {
     Write-Log "  No existing task found"
 }
 
-# Create the scheduled task
+# ----------------------------------------------------------
+# STEP 2: Define the scheduled task components.
+# ----------------------------------------------------------
 Write-Log "Creating scheduled task: $taskName"
 
+# ACTION: Launch PowerShell to execute the audio settings script.
+# -NonInteractive  — no prompts (runs unattended as SYSTEM)
+# -WindowStyle Hidden — no console window visible to users
+# -ExecutionPolicy Bypass — avoids policy restrictions on the script
 $action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument "-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$scriptPath`""
 
-# Trigger on Event ID 112 from DeviceSetupManager — fires when a device
-# container has been fully serviced and properties written to the registry.
+# TRIGGER: Event ID 112 from Microsoft-Windows-DeviceSetupManager/Admin.
+# This fires when a device container has been fully serviced by DSM.
+# We use the CIM class MSFT_TaskEventTrigger to create a native event trigger,
+# as New-ScheduledTaskTrigger does not support event-based triggers directly.
 $triggerClass = Get-CimClass -ClassName "MSFT_TaskEventTrigger" -Namespace "Root/Microsoft/Windows/TaskScheduler"
 $trigger = New-CimInstance -CimClass $triggerClass -ClientOnly
 $trigger.Subscription = @"
@@ -92,17 +151,29 @@ $trigger.Subscription = @"
 "@
 $trigger.Enabled = $true
 
+# PRINCIPAL: Run as SYSTEM with highest privileges.
+# SYSTEM is required because the MMDevices registry keys are owned by
+# AudioEndpointBuilder and need elevated access to modify.
 $principal = New-ScheduledTaskPrincipal `
     -UserId "SYSTEM" `
     -LogonType ServiceAccount `
     -RunLevel Highest
 
+# SETTINGS: Ensure the task runs reliably in all conditions.
+# -AllowStartIfOnBatteries   — run even on battery (laptops/tablets)
+# -DontStopIfGoingOnBatteries — don't kill the task if power is removed
+# -MultipleInstances Queue    — queue runs if multiple devices arrive rapidly
+# -StartWhenAvailable         — run missed triggers if the machine was busy
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -MultipleInstances Queue `
     -StartWhenAvailable
 
+# ----------------------------------------------------------
+# STEP 3: Register the scheduled task.
+# -Force overwrites if it somehow still exists after cleanup.
+# ----------------------------------------------------------
 Register-ScheduledTask `
     -TaskName $taskName `
     -Action $action `
@@ -112,7 +183,9 @@ Register-ScheduledTask `
     -Description "Configures audio device settings when a new device is installed (Event ID 112)" `
     -Force | Out-Null
 
-# Verify
+# ----------------------------------------------------------
+# STEP 4: Verify the task was created successfully.
+# ----------------------------------------------------------
 $verifyTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($verifyTask) {
     Write-Log "  OK  Scheduled task created"
