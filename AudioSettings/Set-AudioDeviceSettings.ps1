@@ -154,18 +154,23 @@ try {
     Write-Log "========================================"
 
     # Query the most recent Event ID 112 to log which device triggered this run.
-    # This helps identify what device caused the scheduled task to fire.
+    # Only looks at events from the last 30 seconds to ensure we log the device
+    # that actually triggered this execution, not a stale event from hours ago.
     try {
-        $triggerEvent = Get-WinEvent -LogName "Microsoft-Windows-DeviceSetupManager/Admin" -MaxEvents 1 -ErrorAction Stop |
-                        Where-Object { $_.Id -eq 112 }
+        $triggerEvent = Get-WinEvent -FilterHashtable @{
+            LogName   = "Microsoft-Windows-DeviceSetupManager/Admin"
+            Id        = 112
+            StartTime = (Get-Date).AddSeconds(-30)
+        } -MaxEvents 1 -ErrorAction Stop
         if ($triggerEvent) {
-            $eventXml  = [xml]$triggerEvent.ToXml()
+            $eventXml   = [xml]$triggerEvent.ToXml()
             $deviceName = ($eventXml.Event.EventData.Data | Where-Object { $_.Name -eq "Prop_DeviceName" }).'#text'
             Write-Log "Triggered by device: $deviceName"
         }
     }
     catch {
-        Write-Log "Could not determine triggering device" -Level "WARN"
+        # No recent Event ID 112 found — script was likely run manually
+        Write-Log "No recent device arrival event found (manual run?)"
     }
 
     Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"
