@@ -62,7 +62,11 @@ $logFile    = Join-Path $logDir $logName
 # Add device names here to prevent unnecessary script execution.
 # Names must match the Prop_DeviceName field in the event data exactly.
 $excludeDevices = @(
-    "Remote Audio"    # RDP audio redirection — persists across sessions, not a real USB device
+    "Remote Audio"         # RDP audio redirection — persists across sessions, not a real USB device
+    # To add more devices, put each on a new line with a COMMA after the previous entry:
+    # "Remote Audio",      # <-- note the comma at the end
+    # "PDF Architect 9",   # <-- comma here too
+    # "Some Other Device"  # <-- NO comma on the last entry
 )
 
 # ============================================================
