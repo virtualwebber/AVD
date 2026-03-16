@@ -33,7 +33,7 @@
 $renderPath  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
 $capturePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
 $logDir      = "C:\_source\logs"
-$logShare    = "\\cukavdukwprod01.file.core.windows.net\profiles\logs"
+$logShare    = "\\fileserver.domain.com\logs\audio"
 $logName     = "${env:COMPUTERNAME}_AudioDeviceSettings_$(Get-Date -Format 'yyyyMMdd').log"
 $logFile     = Join-Path $logDir $logName
 
@@ -70,6 +70,16 @@ function Set-RegistryValue {
         [string]$Type,
         [string]$Description
     )
+
+    # Check if the value is already set correctly — skip if so to avoid
+    # unnecessary writes and noisy logs on repeated triggers.
+    if (Test-Path $Path) {
+        $current = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+        if ($null -ne $current -and $current.$Name -eq $Value) {
+            Write-Log "  --  $Description (already set)"
+            return
+        }
+    }
 
     # Retries up to 5 times with a 500ms gap. AudioEndpointBuilder may briefly re-lock
     # keys after device arrival events, so a short retry loop avoids transient failures.

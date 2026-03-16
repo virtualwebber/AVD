@@ -39,6 +39,8 @@ The main remediation script. Iterates through all devices under the MMDevices Au
 - **Registry paths:** `HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render` and `...\Capture`
 - **Mutex:** Uses `Global\AudioDeviceSettings` to prevent concurrent execution if multiple device events fire simultaneously
 - **Retry logic:** Retries registry writes up to 5 times with 500ms delay (AudioEndpointBuilder may briefly lock keys after device arrival)
+- **Early exit:** If no audio devices exist in the Render or Capture hives, the script exits silently without logging — prevents noise from non-audio device triggers
+- **Trigger logging:** Queries the most recent Event ID 112 (within the last 30 seconds) to log which device caused the execution
 
 ### Set-AudioDevicePermissions.ps1
 
@@ -54,6 +56,7 @@ Takes ownership of the MMDevices Audio registry keys and grants SYSTEM full cont
 Creates a Windows Scheduled Task that triggers `Set-AudioDeviceSettings.ps1` whenever a device is installed. Uses Event ID 112 from `Microsoft-Windows-DeviceSetupManager/Admin`, which fires when a device container has been fully serviced and its properties are written to the registry.
 
 - **Trigger:** Event ID 112 — device container serviced (covers USB plug-in, USB passthrough connection)
+- **Device exclusions:** Configurable `$excludeDevices` array filters out known non-audio devices (e.g. "Remote Audio", "Generic Monitor") at the XPath level so the task never fires for them
 - **Runs as:** SYSTEM with highest privileges
 - **Multiple instances:** Queued (handles rapid device connections)
 - **Idempotent:** Removes any existing task before creating a new one
@@ -84,6 +87,19 @@ Utility script to remove the WMI permanent event subscription created by `Create
 - PowerShell execution policy allows script execution
 - Administrator/SYSTEM access
 
+### Configuration
+
+Each script has a `CONFIGURATION` section at the top with the following variables:
+
+| Variable          | Description                                                             | Default                            |
+| ----------------- | ----------------------------------------------------------------------- | ---------------------------------- |
+| `$logDir`         | Local log directory                                                     | `C:\_source\logs`                  |
+| `$logShare`       | UNC path for centralised logging (set to `$null` or `""` to disable)    | `\\fileserver.domain.com\logs\audio` |
+| `$scriptPath`     | Path to `Set-AudioDeviceSettings.ps1` on the session host               | `C:\_source\Set-AudioDeviceSettings.ps1` |
+| `$excludeDevices` | Array of device names to exclude from triggering (Register-AudioDeviceTask.ps1 only) | `"Remote Audio"`, `"Generic Monitor (HyperVMonitor)"`, `"Generic Monitor"` |
+
+Update `$logShare` in each script to match your environment before deployment.
+
 ### Installation Steps
 
 1. Copy scripts to `C:\_source\` on the session host
@@ -112,11 +128,11 @@ Utility script to remove the WMI permanent event subscription created by `Create
 
 All scripts write to `C:\_source\logs\` with daily rolling log files. Log filenames are prefixed with the computer name for multi-host identification.
 
-| Script                           | Log file pattern                                          |
-| -------------------------------- | --------------------------------------------------------- |
-| `Set-AudioDeviceSettings.ps1`    | `<COMPUTERNAME>_AudioDeviceSettings_yyyyMMdd.log`         |
-| `Set-AudioDevicePermissions.ps1` | `<COMPUTERNAME>_AudioRegistryPermissions_yyyyMMdd.log`    |
-| `Register-AudioDeviceTask.ps1`   | `<COMPUTERNAME>_RegisterAudioTask_yyyyMMdd.log`           |
-| `CreateWMI_Audio_Sub.ps1`        | `<COMPUTERNAME>_AudioWMISubscription_yyyyMMdd.log`        |
+| Script                           | Log file pattern                                       |
+| -------------------------------- | ------------------------------------------------------ |
+| `Set-AudioDeviceSettings.ps1`    | `<COMPUTERNAME>_AudioDeviceSettings_yyyyMMdd.log`      |
+| `Set-AudioDevicePermissions.ps1` | `<COMPUTERNAME>_AudioRegistryPermissions_yyyyMMdd.log` |
+| `Register-AudioDeviceTask.ps1`   | `<COMPUTERNAME>_RegisterAudioTask_yyyyMMdd.log`        |
+| `CreateWMI_Audio_Sub.ps1`        | `<COMPUTERNAME>_AudioWMISubscription_yyyyMMdd.log`     |
 
 Logs are also written to a configurable UNC file share (`$logShare` variable in each script) for centralised collection. If the share is unreachable, logging continues locally without error.
