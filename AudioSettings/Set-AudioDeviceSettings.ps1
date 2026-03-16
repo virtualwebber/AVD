@@ -90,26 +90,38 @@ function Set-RegistryValue {
         [string]$Name,
         [object]$Value,
         [string]$Type,
-        [string]$Description
+        [string]$Description,
+        [switch]$Create    # When set, creates the key/value if they don't exist.
+                           # Use for settings like enhancements toggle where absent = ON.
+                           # Omit for format values where absent = driver never set it.
     )
 
-    # Skip if the registry key doesn't exist — not all audio devices expose
-    # every property key (e.g. some lack FxProperties entirely).
     if (-not (Test-Path $Path)) {
-        Write-Log "  SKIP $Description (key does not exist)" -Level "WARN"
-        return
+        if ($Create) {
+            # Create the key — needed for settings like FxProperties\{1da5d803},5
+            # which must be explicitly created to disable enhancements.
+            New-Item -Path $Path -Force | Out-Null
+        }
+        else {
+            # Skip if the registry key doesn't exist — not all audio devices expose
+            # every property key (e.g. some lack FxProperties entirely).
+            Write-Log "  SKIP $Description (key does not exist)" -Level "WARN"
+            return
+        }
     }
 
-    # Skip if the named value doesn't exist — the device driver never created it,
-    # so forcing it could cause unexpected behaviour.
     $current = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
     if ($null -eq $current) {
-        Write-Log "  SKIP $Description (value does not exist)" -Level "WARN"
-        return
+        if (-not $Create) {
+            # Skip if the named value doesn't exist — the device driver never created it,
+            # so forcing it could cause unexpected behaviour.
+            Write-Log "  SKIP $Description (value does not exist)" -Level "WARN"
+            return
+        }
+        # If -Create is set, fall through to write the value for the first time.
     }
-
-    # Already set correctly — nothing to do.
-    if ($current.$Name -eq $Value) {
+    elseif ($current.$Name -eq $Value) {
+        # Already set correctly — nothing to do.
         Write-Log "  --  $Description (already set)"
         return
     }
@@ -270,7 +282,8 @@ function Set-DeviceSettings {
         Set-RegistryValue -Path $fxPropsPath `
             -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" `
             -Value 1 -Type DWord `
-            -Description "Disable audio enhancements [{1da5d803},5 in FxProperties]"
+            -Description "Disable audio enhancements [{1da5d803},5 in FxProperties]" `
+            -Create
 
         # --- AUDIO FORMAT ---
         # Read the device's existing WAVEFORMATEXTENSIBLE blob, patch only the sample rate,
