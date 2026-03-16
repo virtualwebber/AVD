@@ -33,7 +33,7 @@
 $renderPath  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
 $capturePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
 $logDir      = "C:\_source\logs"
-$logShare    = "\\fileserver.domain.com\logs\audio"
+$logShare    = "\\cukavdukwprod01.file.core.windows.net\profiles\logs"
 $logName     = "${env:COMPUTERNAME}_AudioDeviceSettings_$(Get-Date -Format 'yyyyMMdd').log"
 $logFile     = Join-Path $logDir $logName
 
