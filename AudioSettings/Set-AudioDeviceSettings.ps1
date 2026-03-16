@@ -45,25 +45,14 @@ param(
 $renderPath  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
 $capturePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
 
-# Audio format byte arrays for {f19f064d-082c-4e27-bc73-6882a1bb8e4c},0
-# Both are 2 channel, 16-bit, PCM, WAVE_FORMAT_EXTENSIBLE — only sample rate differs.
-# DVD:       2ch x 16bit x 48000 Hz = 1,536 kbps (192 KB/s)
-# Telephone: 2ch x 16bit x  8000 Hz =   256 kbps  (32 KB/s)  — 6x less bandwidth
-$audioFormats = @{
-    # 2 channel, 16-bit, 48000 Hz (DVD Quality)
-    "DVD"       = [byte[]](0x41,0x00,0x00,0x00,0x01,0x00,0x00,0x00,
-                           0xFE,0xFF,0x02,0x00,0x80,0xBB,0x00,0x00,
-                           0x00,0xEE,0x02,0x00,0x04,0x00,0x10,0x00,
-                           0x16,0x00,0x10,0x00,0x03,0x00,0x00,0x00,
-                           0x01,0x00,0x00,0x00,0x00,0x00,0x10,0x00,
-                           0x80,0x00,0x00,0xAA,0x00,0x38,0x9B,0x71)
-    # 2 channel, 16-bit, 8000 Hz (Telephone Quality)
-    "Telephone" = [byte[]](0x41,0x00,0x00,0x00,0x01,0x00,0x00,0x00,
-                           0xFE,0xFF,0x02,0x00,0x40,0x1F,0x00,0x00,
-                           0x00,0x7D,0x00,0x00,0x04,0x00,0x10,0x00,
-                           0x16,0x00,0x10,0x00,0x03,0x00,0x00,0x00,
-                           0x01,0x00,0x00,0x00,0x00,0x00,0x10,0x00,
-                           0x80,0x00,0x00,0xAA,0x00,0x38,0x9B,0x71)
+# Target sample rates for each quality preset.
+# Instead of hardcoding full WAVEFORMATEXTENSIBLE byte arrays (which assume 2 channels),
+# we read the device's existing format and only patch the sample rate. This preserves the
+# native channel count (mono mics, stereo headphones, etc.) and all other device-specific
+# fields like bit depth, format tag, channel mask, and sub-format GUID.
+$sampleRates = @{
+    "DVD"       = 48000   # 48 kHz — DVD quality
+    "Telephone" = 8000    #  8 kHz — Telephone quality (6x less bandwidth)
 }
 $logDir      = "C:\_source\logs"
 $logShare    = "\\fileserver.domain.com\logs\audio"
@@ -104,14 +93,25 @@ function Set-RegistryValue {
         [string]$Description
     )
 
-    # Check if the value is already set correctly — skip if so to avoid
-    # unnecessary writes and noisy logs on repeated triggers.
-    if (Test-Path $Path) {
-        $current = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
-        if ($null -ne $current -and $current.$Name -eq $Value) {
-            Write-Log "  --  $Description (already set)"
-            return
-        }
+    # Skip if the registry key doesn't exist — not all audio devices expose
+    # every property key (e.g. some lack FxProperties entirely).
+    if (-not (Test-Path $Path)) {
+        Write-Log "  SKIP $Description (key does not exist)" -Level "WARN"
+        return
+    }
+
+    # Skip if the named value doesn't exist — the device driver never created it,
+    # so forcing it could cause unexpected behaviour.
+    $current = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
+    if ($null -eq $current) {
+        Write-Log "  SKIP $Description (value does not exist)" -Level "WARN"
+        return
+    }
+
+    # Already set correctly — nothing to do.
+    if ($current.$Name -eq $Value) {
+        Write-Log "  --  $Description (already set)"
+        return
     }
 
     # Retries up to 5 times with a 500ms gap. AudioEndpointBuilder may briefly re-lock
@@ -121,9 +121,6 @@ function Set-RegistryValue {
 
     while ($attempt -lt $maxAttempts) {
         try {
-            if (-not (Test-Path $Path)) {
-                New-Item -Path $Path -Force | Out-Null
-            }
             Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -ErrorAction Stop
             Write-Log "  OK  $Description"
             return
@@ -140,6 +137,102 @@ function Set-RegistryValue {
     }
 }
 
+function Get-PatchedAudioFormat {
+    <#
+    .SYNOPSIS
+        Reads the device's existing WAVEFORMATEXTENSIBLE blob and patches only the sample rate.
+
+    .DESCRIPTION
+        The registry value {f19f064d},0 (PKEY_AudioEngine_DeviceFormat) stores an 8-byte
+        DEVPROPERTY header followed by a WAVEFORMATEXTENSIBLE structure.
+
+        WAVEFORMATEXTENSIBLE layout (offsets relative to start of blob, including 8-byte header):
+          Offset  0-7  : DEVPROPERTY header (type + flags)
+          Offset  8-9  : wFormatTag        (0xFFFE = WAVE_FORMAT_EXTENSIBLE)
+          Offset 10-11 : nChannels          — 1 = mono, 2 = stereo (PRESERVED)
+          Offset 12-15 : nSamplesPerSec     — sample rate in Hz    (PATCHED)
+          Offset 16-19 : nAvgBytesPerSec    — nSamplesPerSec * nBlockAlign (RECALCULATED)
+          Offset 20-21 : nBlockAlign         — nChannels * wBitsPerSample / 8 (PRESERVED)
+          Offset 22-23 : wBitsPerSample      — typically 16 (PRESERVED)
+          Offset 24+   : cbSize, wValidBitsPerSample, dwChannelMask, SubFormat GUID (PRESERVED)
+
+        By reading the existing blob and only changing offsets 12-19, we preserve the device's
+        native channel count, bit depth, channel mask, and sub-format GUID. This means mono
+        microphones stay mono and stereo headphones stay stereo.
+
+    .PARAMETER PropsPath
+        Registry path to the device's Properties key.
+
+    .PARAMETER TargetSampleRate
+        The desired sample rate in Hz (e.g. 48000 for DVD, 8000 for Telephone).
+
+    .OUTPUTS
+        [byte[]] The patched format blob ready to write back, or $null if the value
+        doesn't exist or the blob is too short to be a valid WAVEFORMATEXTENSIBLE.
+    #>
+    param(
+        [string]$PropsPath,
+        [int]$TargetSampleRate
+    )
+
+    $formatValueName = "{f19f064d-082c-4e27-bc73-6882a1bb8e4c},0"
+
+    # Read the existing format blob from the registry.
+    $props = Get-ItemProperty -Path $PropsPath -Name $formatValueName -ErrorAction SilentlyContinue
+    if ($null -eq $props) {
+        # Value doesn't exist — device driver never wrote a format. Nothing to patch.
+        return $null
+    }
+
+    # Get the raw byte array. Clone it so we don't modify the registry cache in memory.
+    [byte[]]$bytes = $props.$formatValueName.Clone()
+
+    # Minimum valid size: 8-byte header + 18-byte WAVEFORMATEX = 26 bytes.
+    # A full WAVEFORMATEXTENSIBLE is 8 + 40 = 48 bytes, but we only need up to offset 21.
+    if ($bytes.Length -lt 26) {
+        Write-Log "  SKIP Audio format blob too short ($($bytes.Length) bytes)" -Level "WARN"
+        return $null
+    }
+
+    # --- Read current values for logging ---
+
+    # nChannels: 2 bytes at offset 10 (little-endian).
+    # Mono = 1, Stereo = 2. This is preserved as-is.
+    $nChannels = [BitConverter]::ToUInt16($bytes, 10)
+
+    # nSamplesPerSec: 4 bytes at offset 12 (little-endian). Current sample rate.
+    $currentRate = [BitConverter]::ToUInt32($bytes, 12)
+
+    # nBlockAlign: 2 bytes at offset 20 (little-endian).
+    # This is nChannels * wBitsPerSample / 8 (e.g. 2ch * 16bit / 8 = 4, 1ch * 16bit / 8 = 2).
+    # Preserved as-is — it depends on channels and bit depth, not sample rate.
+    $nBlockAlign = [BitConverter]::ToUInt16($bytes, 20)
+
+    Write-Log "  Current format: ${nChannels}ch, ${currentRate} Hz, blockAlign=${nBlockAlign}"
+
+    # If the sample rate is already correct, return $null to signal no change needed.
+    if ($currentRate -eq $TargetSampleRate) {
+        return $null
+    }
+
+    # --- Patch the sample rate (offset 12-15) ---
+    # Convert the target sample rate to 4 little-endian bytes and write into the blob.
+    $rateBytes = [BitConverter]::GetBytes([uint32]$TargetSampleRate)
+    $rateBytes.CopyTo($bytes, 12)
+
+    # --- Recalculate nAvgBytesPerSec (offset 16-19) ---
+    # nAvgBytesPerSec = nSamplesPerSec * nBlockAlign.
+    # This must stay consistent with the new sample rate, otherwise Windows may reject
+    # the format or miscalculate buffer sizes.
+    $avgBytesPerSec = [uint32]($TargetSampleRate * $nBlockAlign)
+    $avgBytes = [BitConverter]::GetBytes($avgBytesPerSec)
+    $avgBytes.CopyTo($bytes, 16)
+
+    Write-Log "  Patched format: ${nChannels}ch, ${TargetSampleRate} Hz, avgBytes=${avgBytesPerSec}"
+
+    return ,$bytes
+}
+
 function Set-DeviceSettings {
     param([string]$HivePath, [string]$HiveLabel, [string]$Quality)
 
@@ -152,12 +245,16 @@ function Set-DeviceSettings {
         return
     }
 
+    # Look up the target sample rate for the chosen quality preset.
+    $targetRate = $sampleRates[$Quality]
+
     foreach ($device in $devices) {
-        # FxProperties — APO (Audio Processing Object) effect chain settings
+        # FxProperties — APO (Audio Processing Object) effect chain settings.
         $propsPath   = Join-Path $device.PSPath "Properties"
         $fxPropsPath = Join-Path $device.PSPath "FxProperties"
 
-        # Read friendly name from Properties for logging. Key {a45c254e},2 = PKEY_Device_FriendlyName.
+        # Read friendly name from Properties for logging.
+        # Key {a45c254e},2 = PKEY_Device_FriendlyName.
         $friendlyName = (Get-ItemProperty -Path $propsPath -ErrorAction SilentlyContinue) |
                         Select-Object -ExpandProperty "{a45c254e-df1c-4efd-8020-67d146a850e0},2" -ErrorAction SilentlyContinue
         $label = if ($friendlyName) { $friendlyName } else { $device.PSChildName }
@@ -176,12 +273,23 @@ function Set-DeviceSettings {
             -Description "Disable audio enhancements [{1da5d803},5 in FxProperties]"
 
         # --- AUDIO FORMAT ---
-        # Properties\{f19f064d},0 is PKEY_AudioEngine_DeviceFormat (WAVEFORMATEXTENSIBLE).
-        # Sets the sample rate to either 48000 Hz (DVD) or 8000 Hz (Telephone).
-        Set-RegistryValue -Path $propsPath `
-            -Name "{f19f064d-082c-4e27-bc73-6882a1bb8e4c},0" `
-            -Value $audioFormats[$Quality] -Type Binary `
-            -Description "Set audio format to $Quality quality [{f19f064d},0 in Properties]"
+        # Read the device's existing WAVEFORMATEXTENSIBLE blob, patch only the sample rate,
+        # and write it back. This preserves the device's native channel count (mono/stereo),
+        # bit depth, channel mask, and sub-format GUID.
+        $patchedFormat = Get-PatchedAudioFormat -PropsPath $propsPath -TargetSampleRate $targetRate
+
+        if ($null -ne $patchedFormat) {
+            # Write the patched format back to the registry.
+            Set-RegistryValue -Path $propsPath `
+                -Name "{f19f064d-082c-4e27-bc73-6882a1bb8e4c},0" `
+                -Value $patchedFormat -Type Binary `
+                -Description "Set audio format to $Quality quality ($targetRate Hz) [{f19f064d},0]"
+        }
+        else {
+            # Get-PatchedAudioFormat returns $null if: the value doesn't exist,
+            # the blob is invalid, or the sample rate is already correct.
+            Write-Log "  --  Audio format unchanged (already correct or not present)"
+        }
     }
 }
 
