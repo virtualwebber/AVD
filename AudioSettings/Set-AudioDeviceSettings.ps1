@@ -148,6 +148,15 @@ if (-not $mutex.WaitOne(0)) {
 }
 
 try {
+    # Early exit — if no audio devices exist in either hive, exit silently.
+    # This prevents unnecessary logging when Event ID 112 fires for non-audio
+    # devices (monitors, printers, USB drives, etc.).
+    $renderDevices  = Get-ChildItem $renderPath  -ErrorAction SilentlyContinue
+    $captureDevices = Get-ChildItem $capturePath -ErrorAction SilentlyContinue
+    if (-not $renderDevices -and -not $captureDevices) {
+        exit 0
+    }
+
     Write-Log "========================================"
     Write-Log "Audio device settings script started"
     Write-Log "Running as: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
