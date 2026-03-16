@@ -27,11 +27,44 @@
 #>
 
 # ============================================================
+# PARAMETERS
+# ============================================================
+
+param(
+    [ValidateSet("DVD", "Telephone")]
+    [string]$OutputQuality = "Telephone",
+
+    [ValidateSet("DVD", "Telephone")]
+    [string]$InputQuality = "Telephone"
+)
+
+# ============================================================
 # CONFIGURATION
 # ============================================================
 
 $renderPath  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
 $capturePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
+
+# Audio format byte arrays for {f19f064d-082c-4e27-bc73-6882a1bb8e4c},0
+# Both are 2 channel, 16-bit, PCM, WAVE_FORMAT_EXTENSIBLE — only sample rate differs.
+# DVD:       2ch x 16bit x 48000 Hz = 1,536 kbps (192 KB/s)
+# Telephone: 2ch x 16bit x  8000 Hz =   256 kbps  (32 KB/s)  — 6x less bandwidth
+$audioFormats = @{
+    # 2 channel, 16-bit, 48000 Hz (DVD Quality)
+    "DVD"       = [byte[]](0x41,0x00,0x00,0x00,0x01,0x00,0x00,0x00,
+                           0xFE,0xFF,0x02,0x00,0x80,0xBB,0x00,0x00,
+                           0x00,0xEE,0x02,0x00,0x04,0x00,0x10,0x00,
+                           0x16,0x00,0x10,0x00,0x03,0x00,0x00,0x00,
+                           0x01,0x00,0x00,0x00,0x00,0x00,0x10,0x00,
+                           0x80,0x00,0x00,0xAA,0x00,0x38,0x9B,0x71)
+    # 2 channel, 16-bit, 8000 Hz (Telephone Quality)
+    "Telephone" = [byte[]](0x41,0x00,0x00,0x00,0x01,0x00,0x00,0x00,
+                           0xFE,0xFF,0x02,0x00,0x40,0x1F,0x00,0x00,
+                           0x00,0x7D,0x00,0x00,0x04,0x00,0x10,0x00,
+                           0x16,0x00,0x10,0x00,0x03,0x00,0x00,0x00,
+                           0x01,0x00,0x00,0x00,0x00,0x00,0x10,0x00,
+                           0x80,0x00,0x00,0xAA,0x00,0x38,0x9B,0x71)
+}
 $logDir      = "C:\_source\logs"
 $logShare    = "\\fileserver.domain.com\logs\audio"
 $logName     = "${env:COMPUTERNAME}_AudioDeviceSettings_$(Get-Date -Format 'yyyyMMdd').log"
@@ -108,7 +141,7 @@ function Set-RegistryValue {
 }
 
 function Set-DeviceSettings {
-    param([string]$HivePath, [string]$HiveLabel)
+    param([string]$HivePath, [string]$HiveLabel, [string]$Quality)
 
     Write-Log "Processing $HiveLabel hive: $HivePath"
 
@@ -141,6 +174,14 @@ function Set-DeviceSettings {
             -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" `
             -Value 1 -Type DWord `
             -Description "Disable audio enhancements [{1da5d803},5 in FxProperties]"
+
+        # --- AUDIO FORMAT ---
+        # Properties\{f19f064d},0 is PKEY_AudioEngine_DeviceFormat (WAVEFORMATEXTENSIBLE).
+        # Sets the sample rate to either 48000 Hz (DVD) or 8000 Hz (Telephone).
+        Set-RegistryValue -Path $propsPath `
+            -Name "{f19f064d-082c-4e27-bc73-6882a1bb8e4c},0" `
+            -Value $audioFormats[$Quality] -Type Binary `
+            -Description "Set audio format to $Quality quality [{f19f064d},0 in Properties]"
     }
 }
 
@@ -192,8 +233,8 @@ try {
         Write-Log "No recent device arrival event found (manual run?)"
     }
 
-    Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"
-    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture"
+    Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"  -Quality $OutputQuality
+    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture" -Quality $InputQuality
 
     Write-Log "========================================"
     Write-Log "Audio device settings script completed"
