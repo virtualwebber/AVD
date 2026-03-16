@@ -51,7 +51,7 @@ $logDir     = "C:\_source\logs"
 
 # Optional UNC file share for centralised logging.
 # Set to $null or "" to disable file share logging.
-$logShare   = "\\fileserver.domain.com\logs\audio"
+$logShare   = "\\cukavdukwprod01.file.core.windows.net\profiles\logs"
 
 # Log file name includes computername for multi-host identification
 $logName    = "${env:COMPUTERNAME}_RegisterAudioTask_$(Get-Date -Format 'yyyyMMdd').log"
