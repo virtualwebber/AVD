@@ -57,6 +57,14 @@ $logShare   = "\\fileserver.domain.com\logs\audio"
 $logName    = "${env:COMPUTERNAME}_RegisterAudioTask_$(Get-Date -Format 'yyyyMMdd').log"
 $logFile    = Join-Path $logDir $logName
 
+# Devices to exclude from triggering the scheduled task.
+# Event ID 112 fires for ALL device types (printers, USB drives, etc.).
+# Add device names here to prevent unnecessary script execution.
+# Names must match the Prop_DeviceName field in the event data exactly.
+$excludeDevices = @(
+    "Remote Audio"    # RDP audio redirection — persists across sessions, not a real USB device
+)
+
 # ============================================================
 # FUNCTIONS
 # ============================================================
@@ -138,14 +146,25 @@ $action = New-ScheduledTaskAction `
 
 # TRIGGER: Event ID 112 from Microsoft-Windows-DeviceSetupManager/Admin.
 # This fires when a device container has been fully serviced by DSM.
+# The XPath filter excludes devices listed in $excludeDevices so the task
+# only fires for real USB devices, not RDP redirections or other noise.
 # We use the CIM class MSFT_TaskEventTrigger to create a native event trigger,
 # as New-ScheduledTaskTrigger does not support event-based triggers directly.
+
+# Build XPath exclusion clauses from the $excludeDevices array.
+# Each entry becomes: Data[@Name='Prop_DeviceName'] != 'device name'
+# Multiple exclusions are joined with " and " so all must be true.
+$exclusions = ($excludeDevices | ForEach-Object { "Data[@Name='Prop_DeviceName'] != '$_'" }) -join " and "
+$xpathQuery = "*[System[EventID=112] and EventData[$exclusions]]"
+
+Write-Log "XPath query: $xpathQuery"
+
 $triggerClass = Get-CimClass -ClassName "MSFT_TaskEventTrigger" -Namespace "Root/Microsoft/Windows/TaskScheduler"
 $trigger = New-CimInstance -CimClass $triggerClass -ClientOnly
 $trigger.Subscription = @"
 <QueryList>
   <Query Id="0" Path="Microsoft-Windows-DeviceSetupManager/Admin">
-    <Select Path="Microsoft-Windows-DeviceSetupManager/Admin">*[System[EventID=112]]</Select>
+    <Select Path="Microsoft-Windows-DeviceSetupManager/Admin">$xpathQuery</Select>
   </Query>
 </QueryList>
 "@

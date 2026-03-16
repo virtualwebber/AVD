@@ -153,6 +153,21 @@ try {
     Write-Log "Running as: $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name)"
     Write-Log "========================================"
 
+    # Query the most recent Event ID 112 to log which device triggered this run.
+    # This helps identify what device caused the scheduled task to fire.
+    try {
+        $triggerEvent = Get-WinEvent -LogName "Microsoft-Windows-DeviceSetupManager/Admin" -MaxEvents 1 -ErrorAction Stop |
+                        Where-Object { $_.Id -eq 112 }
+        if ($triggerEvent) {
+            $eventXml  = [xml]$triggerEvent.ToXml()
+            $deviceName = ($eventXml.Event.EventData.Data | Where-Object { $_.Name -eq "Prop_DeviceName" }).'#text'
+            Write-Log "Triggered by device: $deviceName"
+        }
+    }
+    catch {
+        Write-Log "Could not determine triggering device" -Level "WARN"
+    }
+
     Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"
     Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture"
 
