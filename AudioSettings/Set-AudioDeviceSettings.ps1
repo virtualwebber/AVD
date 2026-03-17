@@ -326,16 +326,16 @@ $mutexName = "Global\AudioDeviceSettings"
 $mutex     = New-Object System.Threading.Mutex($false, $mutexName)
 
 if (-not $mutex.WaitOne(0)) {
+    Write-Host "Another instance is already running — exiting."
     exit 0
 }
 
 try {
-    # Early exit — if no audio devices exist in either hive, exit silently.
-    # This prevents unnecessary logging when Event ID 112 fires for non-audio
-    # devices (monitors, printers, USB drives, etc.).
+    # Early exit — if no audio devices exist in either hive, there is nothing to configure.
     $renderDevices  = Get-ChildItem $renderPath  -ErrorAction SilentlyContinue
     $captureDevices = Get-ChildItem $capturePath -ErrorAction SilentlyContinue
     if (-not $renderDevices -and -not $captureDevices) {
+        Write-Host "No audio devices found in Render or Capture hives — exiting."
         exit 0
     }
 
