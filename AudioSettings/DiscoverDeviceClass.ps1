@@ -1,0 +1,2 @@
+﻿$deviceClassGuid = "4d36e96c-e325-11ce-bfc1-08002be10318" #Multimedia Devices
+Get-PnpDevice | Where-Object {$_.ClassGuid -like "*$deviceClassGuid*" -and $_.InstanceId -like "USB\*" -and $_.Present -like "True"} | FT -AutoSize
