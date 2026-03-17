@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Disables audio enhancements for all MMDevice audio endpoints.
+    Disables audio enhancements and sets sample rates for all MMDevice audio endpoints.
 
 .DESCRIPTION
     Intended to be called by a scheduled task or WMI event subscription on device arrival,
@@ -31,11 +31,16 @@
 # ============================================================
 
 param(
-    [ValidateSet("DVD", "Telephone", "TapePlayer")]
-    [string]$OutputQuality = "Telephone",
+    # Target sample rate (Hz) for render (output) devices. The shared-mode audio engine
+    # handles resampling internally, so any standard rate works regardless of the device's
+    # native hardware capabilities. Default 8000 Hz minimises bandwidth over AVD USB redirection.
+    [ValidateSet(8000, 11025, 16000, 22050, 32000, 44100, 48000)]
+    [int]$OutputRate = 8000,
 
-    [ValidateSet("DVD", "Telephone", "TapePlayer")]
-    [string]$InputQuality = "TapePlayer"
+    # Target sample rate (Hz) for capture (input) devices. Default 8000 Hz minimises
+    # bandwidth over AVD USB redirection.
+    [ValidateSet(8000, 11025, 16000, 22050, 32000, 44100, 48000)]
+    [int]$InputRate = 8000
 )
 
 # ============================================================
@@ -45,16 +50,6 @@ param(
 $renderPath  = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
 $capturePath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Capture"
 
-# Target sample rates for each quality preset.
-# Instead of hardcoding full WAVEFORMATEXTENSIBLE byte arrays (which assume 2 channels),
-# we read the device's existing format and only patch the sample rate. This preserves the
-# native channel count (mono mics, stereo headphones, etc.) and all other device-specific
-# fields like bit depth, format tag, channel mask, and sub-format GUID.
-$sampleRates = @{
-    "DVD"        = 48000   # 48 kHz — DVD quality
-    "Telephone"  = 8000    #  8 kHz — Telephone quality
-    "TapePlayer" = 16000   # 16 kHz — Tape player quality
-}
 $logDir      = "C:\_source\logs"
 $logShare    = "\\fileserver.domain.com\logs\audio"
 $logName     = "${env:COMPUTERNAME}_AudioDeviceSettings_$(Get-Date -Format 'yyyyMMdd').log"
@@ -253,8 +248,7 @@ function Set-DeviceSettings {
     param(
         [string]$HivePath,
         [string]$HiveLabel,
-        [string]$Quality,
-        [switch]$EnhancementsOnly   # When set, only disable enhancements — skip format changes.
+        [int]$TargetRate              # Target sample rate in Hz
     )
 
     Write-Log "Processing $HiveLabel hive: $HivePath"
@@ -265,9 +259,6 @@ function Set-DeviceSettings {
         Write-Log "No devices found in $HiveLabel hive" -Level "WARN"
         return
     }
-
-    # Look up the target sample rate for the chosen quality preset.
-    $targetRate = $sampleRates[$Quality]
 
     foreach ($device in $devices) {
         # FxProperties — APO (Audio Processing Object) effect chain settings.
@@ -295,12 +286,7 @@ function Set-DeviceSettings {
             -Create
 
         # --- AUDIO FORMAT ---
-        # Skip format changes if -EnhancementsOnly is set (e.g. for capture devices where
-        # registry-based format patching can cause the mic to record silence).
-        if ($EnhancementsOnly) {
-            Write-Log "  --  Skipping format changes (enhancements only mode)"
-            continue
-        }
+        Write-Log "  Target sample rate: $TargetRate Hz"
 
         # Windows stores the audio format in multiple registry properties that must all
         # agree. Patching only one causes the capture stream to fail silently (mic shows
@@ -315,13 +301,13 @@ function Set-DeviceSettings {
 
         foreach ($fmt in $formatProperties) {
             $patchedFormat = Get-PatchedAudioFormat -PropsPath $propsPath `
-                -FormatValueName $fmt.Name -TargetSampleRate $targetRate
+                -FormatValueName $fmt.Name -TargetSampleRate $TargetRate
 
             if ($null -ne $patchedFormat) {
                 Set-RegistryValue -Path $propsPath `
                     -Name $fmt.Name `
                     -Value $patchedFormat -Type Binary `
-                    -Description "Set $($fmt.Label) to $Quality quality ($targetRate Hz) [$($fmt.Name)]"
+                    -Description "Set $($fmt.Label) to $TargetRate Hz [$($fmt.Name)]"
             }
             else {
                 Write-Log "  --  $($fmt.Label) unchanged (already correct or not present)"
@@ -378,8 +364,11 @@ try {
         Write-Log "No recent device arrival event found (manual run?)"
     }
 
-    Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"  -Quality $OutputQuality
-    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture" -Quality $InputQuality -EnhancementsOnly
+    Write-Log "Output sample rate: $OutputRate Hz"
+    Write-Log "Input sample rate:  $InputRate Hz"
+
+    Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"  -TargetRate $OutputRate
+    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture" -TargetRate $InputRate
 
     Write-Log "========================================"
     Write-Log "Audio device settings script completed"
