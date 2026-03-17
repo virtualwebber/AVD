@@ -250,12 +250,7 @@ function Get-PatchedAudioFormat {
 }
 
 function Set-DeviceSettings {
-    param(
-        [string]$HivePath,
-        [string]$HiveLabel,
-        [string]$Quality,
-        [switch]$EnhancementsOnly   # When set, only disable enhancements — skip format changes.
-    )
+    param([string]$HivePath, [string]$HiveLabel, [string]$Quality)
 
     Write-Log "Processing $HiveLabel hive: $HivePath"
 
@@ -295,13 +290,6 @@ function Set-DeviceSettings {
             -Create
 
         # --- AUDIO FORMAT ---
-        # Skip format changes if -EnhancementsOnly is set (e.g. for capture devices where
-        # registry-based format patching can cause the mic to record silence).
-        if ($EnhancementsOnly) {
-            Write-Log "  --  Skipping format changes (enhancements only mode)"
-            continue
-        }
-
         # Windows stores the audio format in multiple registry properties that must all
         # agree. Patching only one causes the capture stream to fail silently (mic shows
         # volume but records silence). Each blob is read individually and only the sample
@@ -379,7 +367,7 @@ try {
     }
 
     Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"  -Quality $OutputQuality
-    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture" -Quality $InputQuality -EnhancementsOnly
+    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture" -Quality $InputQuality
 
     Write-Log "========================================"
     Write-Log "Audio device settings script completed"
