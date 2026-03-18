@@ -91,17 +91,50 @@ $blockRegPath  = "$clientRegPath\UsbBlockDeviceBySetupClasses"
 
 
 # ============================================================
+# LOGGING SETUP
+# ============================================================
+
+$logDir   = $env:TEMP
+$logName  = "Set-AVDRemoteFXUsbFiltering.log"
+$logFile  = Join-Path $logDir $logName
+$logShare = $null
+
+function Write-Log {
+    param([string]$Message, [string]$Level = "INFO")
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    }
+    $entry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [$Level] $Message"
+    Add-Content -Path $logFile -Value $entry
+    if ($logShare) {
+        try {
+            if (-not (Test-Path $logShare)) {
+                New-Item -ItemType Directory -Path $logShare -Force -ErrorAction Stop | Out-Null
+            }
+            Add-Content -Path (Join-Path $logShare $logName) -Value $entry -ErrorAction Stop
+        }
+        catch {
+            # Silently skip if the share is unreachable
+        }
+    }
+    Write-Host $entry
+}
+
+Write-Log "Log file: $logFile"
+
+
+# ============================================================
 # ENSURE REGISTRY KEYS EXIST
 # ============================================================
 
-Write-Host "`n[1/4] Checking registry keys..." -ForegroundColor White
+Write-Log "[1/4] Checking registry keys..."
 
 foreach ($path in @($clientRegPath, $selectRegPath, $blockRegPath)) {
     if (-not (Test-Path $path)) {
         New-Item -Path $path -Force | Out-Null
-        Write-Host "      Created: $path" -ForegroundColor DarkGray
+        Write-Log "Created: $path"
     } else {
-        Write-Host "      Exists:  $path" -ForegroundColor DarkGray
+        Write-Log "Exists:  $path"
     }
 }
 
@@ -130,20 +163,26 @@ foreach ($path in @($clientRegPath, $selectRegPath, $blockRegPath)) {
 #   Value 80 (0x50) is the Windows App default. Do not modify without testing.
 # ============================================================
 
-Write-Host "`n[2/4] Setting parent flags..." -ForegroundColor White
+Write-Log "[2/4] Setting parent flags..."
 
-# Set by this script for reference - must also be applied via GPO (see header)
-Set-ItemProperty -Path $clientRegPath -Name "fUsbRedirectionEnableMode"         -Value 2  -Type DWord
-Write-Host "      fUsbRedirectionEnableMode         = 2  (NOTE: must also be set via GPO)" -ForegroundColor Yellow
+# fUsbRedirectionEnableMode is NOT set by this script — it MUST be applied via GPO.
+# The Terminal Services CSE performs critical initialisation (TsUsbFlt driver registration)
+# that a direct registry write cannot replicate. See script header for GPO path and details.
+Write-Log "fUsbRedirectionEnableMode — not set by this script, must be applied via GPO (see script header for path)" -Level "WARN"
 
 Set-ItemProperty -Path $clientRegPath -Name "fEnableUsbBlockDeviceBySetupClass" -Value 1  -Type DWord
-Write-Host "      fEnableUsbBlockDeviceBySetupClass  = 1  (block filter active)" -ForegroundColor Green
+Write-Log "fEnableUsbBlockDeviceBySetupClass  = 1  (block filter active)"
 
 Set-ItemProperty -Path $clientRegPath -Name "fEnableUsbSelectDeviceByInterface" -Value 1  -Type DWord
-Write-Host "      fEnableUsbSelectDeviceByInterface  = 1  (select filter active)" -ForegroundColor Green
+Write-Log "fEnableUsbSelectDeviceByInterface  = 1  (select filter active)"
 
-Set-ItemProperty -Path $clientRegPath -Name "fEnableUsbNoAckIsochWriteToDevice" -Value 80 -Type DWord
-Write-Host "      fEnableUsbNoAckIsochWriteToDevice  = 80 (isochronous audio default)" -ForegroundColor DarkGray
+$existingIsoch = Get-ItemProperty -Path $clientRegPath -Name "fEnableUsbNoAckIsochWriteToDevice" -ErrorAction SilentlyContinue
+if ($null -eq $existingIsoch) {
+    Set-ItemProperty -Path $clientRegPath -Name "fEnableUsbNoAckIsochWriteToDevice" -Value 80 -Type DWord
+    Write-Log "fEnableUsbNoAckIsochWriteToDevice  = 80 (isochronous audio default — created)"
+} else {
+    Write-Log "fEnableUsbNoAckIsochWriteToDevice  = $($existingIsoch.fEnableUsbNoAckIsochWriteToDevice) (already exists — not modified)"
+}
 
 
 # ============================================================
@@ -151,13 +190,13 @@ Write-Host "      fEnableUsbNoAckIsochWriteToDevice  = 80 (isochronous audio def
 # Ensures a clean known state on every run - no stale entries
 # ============================================================
 
-Write-Host "`n[3/4] Clearing existing filter entries..." -ForegroundColor White
+Write-Log "[3/4] Clearing existing filter entries..."
 
 Remove-Item -Path $selectRegPath -Force -Recurse -ErrorAction SilentlyContinue
 Remove-Item -Path $blockRegPath  -Force -Recurse -ErrorAction SilentlyContinue
 New-Item -Path $selectRegPath -Force | Out-Null
 New-Item -Path $blockRegPath  -Force | Out-Null
-Write-Host "      Filter subkeys cleared and recreated" -ForegroundColor DarkGray
+Write-Log "Filter subkeys cleared and recreated"
 
 
 # ============================================================
@@ -173,8 +212,8 @@ Write-Host "      Filter subkeys cleared and recreated" -ForegroundColor DarkGra
 # at the parent device level, so a strict allow-list silently excludes them.
 # ============================================================
 
-Write-Host "`n[4/4] Writing filter entries..." -ForegroundColor White
-Write-Host "`n      SELECT LIST (devices allowed through to block list evaluation):" -ForegroundColor Cyan
+Write-Log "[4/4] Writing filter entries..."
+Write-Log "SELECT LIST (devices allowed through to block list evaluation):"
 
 $selectGuids = [ordered]@{
     "1000" = @{ Guid = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"; Desc = "USB Audio interface" }
@@ -186,7 +225,7 @@ $selectGuids = [ordered]@{
 
 foreach ($entry in $selectGuids.GetEnumerator()) {
     Set-ItemProperty -Path $selectRegPath -Name $entry.Key -Value $entry.Value.Guid -Type String
-    Write-Host ("      [{0}] {1,-45} {2}" -f $entry.Key, $entry.Value.Guid, $entry.Value.Desc) -ForegroundColor Cyan
+    Write-Log ("[{0}] {1,-45} {2}" -f $entry.Key, $entry.Value.Guid, $entry.Value.Desc)
 }
 
 
@@ -205,7 +244,7 @@ foreach ($entry in $selectGuids.GetEnumerator()) {
 # USB storage is already effectively blocked via {4D36E967} (Disk Drives).
 # ============================================================
 
-Write-Host "`n      BLOCK LIST (device classes hidden from picker):" -ForegroundColor Yellow
+Write-Log "BLOCK LIST (device classes hidden from picker):"
 
 $blockGuids = [ordered]@{
     "1000" = @{ Guid = "{53D29EF7-377C-4D14-864B-EB3A85769359}"; Desc = "Biometric (fingerprint readers)" }
@@ -215,11 +254,12 @@ $blockGuids = [ordered]@{
     "1004" = @{ Guid = "{50DD5230-BA8A-11D1-BF5D-0000F805F530}"; Desc = "Smartcard" }
     "1005" = @{ Guid = "{E0CBF06C-CD8B-4647-BB8A-263B43F0F974}"; Desc = "Bluetooth" }
     "1006" = @{ Guid = "{4D36E972-E325-11CE-BFC1-08002BE10318}"; Desc = "Network Adapters" }
+    "1007" = @{ Guid = "{4D36E96F-E325-11CE-BFC1-08002BE10318}"; Desc = "Mouse / Pointing Devices" }
 }
 
 foreach ($entry in $blockGuids.GetEnumerator()) {
     Set-ItemProperty -Path $blockRegPath -Name $entry.Key -Value $entry.Value.Guid -Type String
-    Write-Host ("      [{0}] {1,-45} {2}" -f $entry.Key, $entry.Value.Guid, $entry.Value.Desc) -ForegroundColor Yellow
+    Write-Log ("[{0}] {1,-45} {2}" -f $entry.Key, $entry.Value.Guid, $entry.Value.Desc)
 }
 
 
@@ -227,22 +267,18 @@ foreach ($entry in $blockGuids.GetEnumerator()) {
 # SUMMARY
 # ============================================================
 
-Write-Host "`n============================================================" -ForegroundColor White
-Write-Host " Configuration applied successfully" -ForegroundColor Green
-Write-Host "============================================================" -ForegroundColor White
-Write-Host @"
-
- Next steps:
-   1. Confirm GPO has applied (see script header for GPO path)
-   2. Verify TsUsbFlt is in UpperFilters:
-      Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-444553540000}' | Select-Object UpperFilters
-   3. Plug in USB audio device BEFORE opening MSTSC or Windows App
-   4. Open MSTSC > Show Options > Local Resources > More
-   5. Expand 'Other supported RemoteFX USB devices'
-      - Audio devices should appear
-      - Cameras, fingerprint readers, storage etc. should not
-
- If 'Other supported RemoteFX USB devices' category is missing:
-   TsUsbFlt is not loaded - GPO has not applied correctly or reboot required
-
-"@ -ForegroundColor Gray
+Write-Log "============================================================"
+Write-Log "Configuration applied successfully"
+Write-Log "============================================================"
+Write-Log "Next steps:"
+Write-Log "  1. Confirm GPO has applied (see script header for GPO path)"
+Write-Log "  2. Verify TsUsbFlt is in UpperFilters:"
+Write-Log "     Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-444553540000}' | Select-Object UpperFilters"
+Write-Log "  3. Plug in USB audio device BEFORE opening MSTSC or Windows App"
+Write-Log "  4. Open MSTSC > Show Options > Local Resources > More"
+Write-Log "  5. Expand 'Other supported RemoteFX USB devices'"
+Write-Log "     - Audio devices should appear"
+Write-Log "     - Cameras, fingerprint readers, storage etc. should not"
+Write-Log "If 'Other supported RemoteFX USB devices' category is missing:" -Level "WARN"
+Write-Log "  TsUsbFlt is not loaded - GPO has not applied correctly or reboot required" -Level "WARN"
+Write-Log "Log saved to: $logFile"
