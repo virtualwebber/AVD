@@ -186,6 +186,8 @@ HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services\Client
 
 ### Block List — `...\UsbBlockDeviceBySetupClasses`
 
+> Setup class GUIDs are defined by Microsoft: [System-Defined Device Setup Classes Available to Vendors](https://learn.microsoft.com/en-us/windows-hardware/drivers/install/system-defined-device-setup-classes-available-to-vendors)
+
 | Index | GUID | Class |
 |---|---|---|
 | 1000 | `{53D29EF7-377C-4D14-864B-EB3A85769359}` | Biometric |

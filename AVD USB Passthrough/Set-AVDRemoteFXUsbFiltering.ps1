@@ -73,12 +73,16 @@
     If TsUsbFlt is NOT in UpperFilters, the GPO has not applied correctly or the
     machine needs a reboot.
 
+.LINK
+    https://learn.microsoft.com/en-us/windows-hardware/drivers/install/system-defined-device-setup-classes-available-to-vendors
+
 .NOTES
     Author      : Andrew Webber
     Requires    : Administrator rights
     Tested On   : Windows 11, MSTSC, Windows App, Azure Virtual Desktop
     Important   : fUsbRedirectionEnableMode must be set via GPO - see description above
                   Run this script AFTER the GPO has been applied and machine rebooted
+    Reference   : Setup class GUIDs sourced from Microsoft documentation — see .LINK above
 #>
 
 # ============================================================
