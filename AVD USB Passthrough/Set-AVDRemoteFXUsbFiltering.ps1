@@ -255,6 +255,7 @@ $blockGuids = [ordered]@{
     "1005" = @{ Guid = "{E0CBF06C-CD8B-4647-BB8A-263B43F0F974}"; Desc = "Bluetooth" }
     "1006" = @{ Guid = "{4D36E972-E325-11CE-BFC1-08002BE10318}"; Desc = "Network Adapters" }
     "1007" = @{ Guid = "{4D36E96F-E325-11CE-BFC1-08002BE10318}"; Desc = "Mouse / Pointing Devices" }
+    "1008" = @{ Guid = "{4D36E96B-E325-11CE-BFC1-08002BE10318}"; Desc = "Keyboard" }
 }
 
 foreach ($entry in $blockGuids.GetEnumerator()) {
