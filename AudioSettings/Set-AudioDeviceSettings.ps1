@@ -53,7 +53,7 @@ param(
     # Controls "Allow applications to take exclusive control of this device" on the
     # Advanced tab. Registry value {b3f8fa53},3 (DWORD): 1 = ticked, 0 = unticked.
     # Default $null = leave untouched.
-    [Nullable[bool]]$AllowExclusive = 0,
+    [Nullable[bool]]$AllowExclusive = 1,
 
     # Controls "Give exclusive mode applications priority" on the Advanced tab.
     # Registry value {b3f8fa53},4 (DWORD): 1 = ticked, 0 = unticked.

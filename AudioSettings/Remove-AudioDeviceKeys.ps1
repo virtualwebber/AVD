@@ -15,6 +15,13 @@
 
     Can also be run manually, elevated, for testing or one-off remediation.
 
+    RESTART AUDIOENDPOINTBUILDER
+       Optionally restarts the AudioEndpointBuilder service after cleanup.
+       This clears the in-memory name counter so re-plugging a device gives
+       "Headset" instead of "2 - Headset". WARNING: this will momentarily
+       interrupt all active audio streams (including Remote Audio).
+       Disabled by default -- enable via $RestartAudioService = $true below.
+
     MUTEX
        A named global mutex ensures only one instance of this script runs at a
        time; subsequent firings exit immediately without doing any work.
@@ -37,6 +44,11 @@ $logDir      = "C:\_source\logs"
 $logShare    = "\\fileserver.domain.com\logs\audio"
 $logName     = "${env:COMPUTERNAME}_AudioDeviceRemoval_$(Get-Date -Format 'yyyyMMdd').log"
 $logFile     = Join-Path $logDir $logName
+
+# Restart AudioEndpointBuilder after cleanup to reset the device name counter.
+# Prevents "2 - Headset" naming on re-plug. WARNING: momentarily interrupts
+# all active audio streams including Remote Audio.
+$RestartAudioService = $false
 
 # Friendly names containing any of these strings are protected and never deleted.
 # Remote Audio is the RDP/AVD audio redirection endpoint.
@@ -200,6 +212,17 @@ try {
 
     Remove-StaleDevices -HivePath $renderPath  -HiveLabel "Render"
     Remove-StaleDevices -HivePath $capturePath -HiveLabel "Capture"
+
+    if ($RestartAudioService) {
+        Write-Log "Restarting AudioEndpointBuilder service (name counter reset)"
+        try {
+            Restart-Service -Name AudioEndpointBuilder -Force -ErrorAction Stop
+            Write-Log "  OK  AudioEndpointBuilder restarted"
+        }
+        catch {
+            Write-Log "  FAIL Could not restart AudioEndpointBuilder -- $($_.Exception.Message)" -Level "WARN"
+        }
+    }
 
     Write-Log "========================================"
     Write-Log "Audio device removal cleanup completed"
