@@ -41,14 +41,14 @@
 param(
     # Target sample rate (Hz) for render (output) devices. The shared-mode audio engine
     # handles resampling internally, so any standard rate works regardless of the device's
-    # native hardware capabilities. Default 8000 Hz minimises bandwidth over AVD USB redirection.
-    [ValidateSet(8000, 11025, 16000, 22050, 32000, 44100, 48000)]
-    [int]$OutputRate = 8000,
+    # native hardware capabilities. Default $null = leave untouched.
+    [ValidateSet($null, 8000, 11025, 16000, 22050, 32000, 44100, 48000)]
+    [Nullable[int]]$OutputRate = $null,
 
-    # Target sample rate (Hz) for capture (input) devices. Default 8000 Hz minimises
-    # bandwidth over AVD USB redirection.
-    [ValidateSet(8000, 11025, 16000, 22050, 32000, 44100, 48000)]
-    [int]$InputRate = 8000,
+    # Target sample rate (Hz) for capture (input) devices.
+    # Default $null = leave untouched.
+    [ValidateSet($null, 8000, 11025, 16000, 22050, 32000, 44100, 48000)]
+    [Nullable[int]]$InputRate = $null,
 
     # Controls "Allow applications to take exclusive control of this device" on the
     # Advanced tab. Registry value {b3f8fa53},3 (DWORD): 1 = ticked, 0 = unticked.
@@ -326,31 +326,33 @@ function Set-DeviceSettings {
         }
 
         # --- AUDIO FORMAT ---
-        Write-Log "  Target sample rate: $TargetRate Hz"
+        if ($null -ne $TargetRate) {
+            Write-Log "  Target sample rate: $TargetRate Hz"
 
-        # Windows stores the audio format in multiple registry properties that must all
-        # agree. Patching only one causes the capture stream to fail silently (mic shows
-        # volume but records silence). Each blob is read individually and only the sample
-        # rate is patched — channels, bit depth, and all other fields are preserved.
-        $formatProperties = @(
-            @{ Name = "{f19f064d-082c-4e27-bc73-6882a1bb8e4c},0"; Label = "DeviceFormat" }   # PKEY_AudioEngine_DeviceFormat — primary format used by the audio engine
-            @{ Name = "{e4870e26-3cc5-4cd2-ba46-ca0a9a70ed04},0"; Label = "OEMFormat" }      # PKEY_AudioEngine_OEMFormat — OEM/driver default format
-            @{ Name = "{3d6e1656-72d5-4661-8d01-10f69e406c60},3"; Label = "Format3" }        # Additional format property written by AudioEndpointBuilder
-            @{ Name = "{624f56de-fd24-473e-814a-de40aacaed16},3"; Label = "Format4" }        # Additional format property written by AudioEndpointBuilder
-        )
+            # Windows stores the audio format in multiple registry properties that must all
+            # agree. Patching only one causes the capture stream to fail silently (mic shows
+            # volume but records silence). Each blob is read individually and only the sample
+            # rate is patched — channels, bit depth, and all other fields are preserved.
+            $formatProperties = @(
+                @{ Name = "{f19f064d-082c-4e27-bc73-6882a1bb8e4c},0"; Label = "DeviceFormat" }   # PKEY_AudioEngine_DeviceFormat — primary format used by the audio engine
+                @{ Name = "{e4870e26-3cc5-4cd2-ba46-ca0a9a70ed04},0"; Label = "OEMFormat" }      # PKEY_AudioEngine_OEMFormat — OEM/driver default format
+                @{ Name = "{3d6e1656-72d5-4661-8d01-10f69e406c60},3"; Label = "Format3" }        # Additional format property written by AudioEndpointBuilder
+                @{ Name = "{624f56de-fd24-473e-814a-de40aacaed16},3"; Label = "Format4" }        # Additional format property written by AudioEndpointBuilder
+            )
 
-        foreach ($fmt in $formatProperties) {
-            $patchedFormat = Get-PatchedAudioFormat -PropsPath $propsPath `
-                -FormatValueName $fmt.Name -TargetSampleRate $TargetRate
+            foreach ($fmt in $formatProperties) {
+                $patchedFormat = Get-PatchedAudioFormat -PropsPath $propsPath `
+                    -FormatValueName $fmt.Name -TargetSampleRate $TargetRate
 
-            if ($null -ne $patchedFormat) {
-                Set-RegistryValue -Path $propsPath `
-                    -Name $fmt.Name `
-                    -Value $patchedFormat -Type Binary `
-                    -Description "Set $($fmt.Label) to $TargetRate Hz [$($fmt.Name)]"
-            }
-            else {
-                Write-Log "  --  $($fmt.Label) unchanged (already correct or not present)"
+                if ($null -ne $patchedFormat) {
+                    Set-RegistryValue -Path $propsPath `
+                        -Name $fmt.Name `
+                        -Value $patchedFormat -Type Binary `
+                        -Description "Set $($fmt.Label) to $TargetRate Hz [$($fmt.Name)]"
+                }
+                else {
+                    Write-Log "  --  $($fmt.Label) unchanged (already correct or not present)"
+                }
             }
         }
     }
@@ -404,8 +406,8 @@ try {
         Write-Log "No recent device arrival event found (manual run?)"
     }
 
-    Write-Log "Output sample rate: $OutputRate Hz"
-    Write-Log "Input sample rate:  $InputRate Hz"
+    Write-Log "Output sample rate: $(if ($null -ne $OutputRate) { "$OutputRate Hz" } else { 'unchanged' })"
+    Write-Log "Input sample rate:  $(if ($null -ne $InputRate) { "$InputRate Hz" } else { 'unchanged' })"
     Write-Log "Allow exclusive:    $(if ($null -ne $AllowExclusive) { if ($AllowExclusive) {'ON'} else {'OFF'} } else { 'unchanged' })"
     Write-Log "Exclusive priority: $(if ($null -ne $ExclusivePriority) { if ($ExclusivePriority) {'ON'} else {'OFF'} } else { 'unchanged' })"
 
