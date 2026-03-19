@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
     Disables audio enhancements, sets sample rates, and optionally controls exclusive mode
-    for all MMDevice audio endpoints.
+    for all audio devices.
 
 .DESCRIPTION
     Intended to be called by a scheduled task or WMI event subscription on device arrival,

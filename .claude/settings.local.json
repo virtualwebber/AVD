@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wevtutil gl \"Microsoft-Windows-Kernel-PnP/Device Management\")",
+      "Bash(wevtutil gl \"Microsoft-Windows-DriverFrameworks-UserMode/Operational\")",
+      "Bash(wevtutil gl \"Microsoft-Windows-Kernel-PnP/Configuration\")",
+      "Bash(wevtutil qe \"Microsoft-Windows-Kernel-PnP/Device Management\" /c:20 /rd:true /f:text)",
+      "Bash(powershell -Command \"Get-WinEvent -LogName ''Microsoft-Windows-Kernel-PnP/Device Management'' -MaxEvents 50 | Select-Object Id, TimeCreated, Message | Format-Table -AutoSize -Wrap\")",
+      "Bash(wevtutil qe \"Microsoft-Windows-Kernel-PnP/Device Management\" /c:3 /rd:true /f:xml)",
+      "Bash(powershell -Command \"Get-WinEvent -LogName ''Microsoft-Windows-Kernel-PnP/Device Management'' -MaxEvents 3 | ForEach-Object { $_.ToXml\\(\\) }\")",
+      "Bash(powershell -Command \"Get-WinEvent -LogName ''Microsoft-Windows-Kernel-PnP/Device Management'' -MaxEvents 3 | ForEach-Object { [string]\\($_.ToXml\\(\\)\\) }\")",
+      "Bash(powershell -NoProfile -Command 'Get-WinEvent -LogName \"\"Microsoft-Windows-Kernel-PnP/Device Management\"\" -MaxEvents 3 | ForEach-Object { $_.ToXml\\(\\) }')",
+      "Bash(powershell -NoProfile -Command 'Get-WinEvent -LogName \"\"Microsoft-Windows-Kernel-PnP/Device Management\"\" -MaxEvents 200 | Where-Object { $_.Id -eq 1011 } | Select-Object -First 3 | ForEach-Object { $_.ToXml\\(\\) }')",
+      "Bash(powershell -NoProfile -Command 'Get-WinEvent -LogName \"\"Microsoft-Windows-Kernel-PnP/Device Management\"\" -MaxEvents 500 | Group-Object Id | Select-Object Name, Count | Sort-Object Count -Descending')",
+      "Bash(powershell -NoProfile -Command 'Get-WinEvent -LogName \"\"Microsoft-Windows-Kernel-PnP/Device Management\"\" -MaxEvents 500 | Where-Object { $_.Id -eq 1010 -and $_.Properties[0].Value -like \"\"USB\\\\VID*\"\" } | ForEach-Object { $_.Properties[0].Value } | Sort-Object -Unique')",
+      "Bash(powershell -NoProfile -Command 'Get-WinEvent -LogName \"\"Microsoft-Windows-Kernel-PnP/Device Management\"\" -MaxEvents 100 | Where-Object { $_.Id -eq 1010 -and $_.Properties[0].Value -like \"\"USB\\\\VID_0B0E*\"\" } | Select-Object -First 1 | ForEach-Object { $_.ToXml\\(\\) }')"
+    ]
+  }
+}
