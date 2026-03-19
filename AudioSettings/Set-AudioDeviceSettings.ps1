@@ -266,7 +266,7 @@ function Set-DeviceSettings {
     param(
         [string]$HivePath,
         [string]$HiveLabel,
-        [int]$TargetRate,                  # Target sample rate in Hz
+        [Nullable[int]]$TargetRate,           # Target sample rate in Hz ($null = skip)
         [Nullable[bool]]$AllowExclusive,   # {b3f8fa53},3 — Allow exclusive control
         [Nullable[bool]]$ExclusivePriority # {b3f8fa53},4 — Give exclusive mode priority
     )
