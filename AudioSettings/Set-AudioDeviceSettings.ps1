@@ -1,6 +1,7 @@
 ﻿<#
 .SYNOPSIS
-    Disables audio enhancements and sets sample rates for all MMDevice audio endpoints.
+    Disables audio enhancements, sets sample rates, and optionally controls exclusive mode
+    for all MMDevice audio endpoints.
 
 .DESCRIPTION
     Intended to be called by a scheduled task or WMI event subscription on device arrival,
@@ -14,6 +15,13 @@
        unchecks "Enable audio enhancements". Confirmed by live registry capture before/after
        toggling both the Voice Clarity (capture) and Headset Earphone (render) toggles.
        Absent = enhancements ON. Present with value 1 = enhancements OFF.
+
+    EXCLUSIVE MODE
+       Two separate DWORD values under Properties control the Advanced-tab checkboxes:
+         {b3f8fa53},3 = "Allow applications to take exclusive control of this device"
+         {b3f8fa53},4 = "Give exclusive mode applications priority"
+       Each is independently 1 = ticked (ON), 0 = unticked (OFF).
+       Applies to both render (output) and capture (input) devices.
 
     MUTEX
        WMI event subscriptions can fire multiple times per device insertion. A named global
@@ -40,7 +48,17 @@ param(
     # Target sample rate (Hz) for capture (input) devices. Default 8000 Hz minimises
     # bandwidth over AVD USB redirection.
     [ValidateSet(8000, 11025, 16000, 22050, 32000, 44100, 48000)]
-    [int]$InputRate = 8000
+    [int]$InputRate = 8000,
+
+    # Controls "Allow applications to take exclusive control of this device" on the
+    # Advanced tab. Registry value {b3f8fa53},3 (DWORD): 1 = ticked, 0 = unticked.
+    # Default $null = leave untouched.
+    [Nullable[bool]]$AllowExclusive = 0,
+
+    # Controls "Give exclusive mode applications priority" on the Advanced tab.
+    # Registry value {b3f8fa53},4 (DWORD): 1 = ticked, 0 = unticked.
+    # Default $null = leave untouched.
+    [Nullable[bool]]$ExclusivePriority = 0
 )
 
 # ============================================================
@@ -248,7 +266,9 @@ function Set-DeviceSettings {
     param(
         [string]$HivePath,
         [string]$HiveLabel,
-        [int]$TargetRate              # Target sample rate in Hz
+        [int]$TargetRate,                  # Target sample rate in Hz
+        [Nullable[bool]]$AllowExclusive,   # {b3f8fa53},3 — Allow exclusive control
+        [Nullable[bool]]$ExclusivePriority # {b3f8fa53},4 — Give exclusive mode priority
     )
 
     Write-Log "Processing $HiveLabel hive: $HivePath"
@@ -284,6 +304,26 @@ function Set-DeviceSettings {
             -Value 1 -Type DWord `
             -Description "Disable audio enhancements [{1da5d803},5 in FxProperties]" `
             -Create
+
+        # --- EXCLUSIVE MODE ---
+        # Two separate DWORD values under Properties control the Advanced-tab checkboxes:
+        #   {b3f8fa53},3 = "Allow applications to take exclusive control of this device"
+        #   {b3f8fa53},4 = "Give exclusive mode applications priority"
+        # Each is independently 1 = ticked, 0 = unticked.
+        if ($null -ne $AllowExclusive) {
+            Set-RegistryValue -Path $propsPath `
+                -Name "{b3f8fa53-0004-438e-9003-51a46e139bfc},3" `
+                -Value ([int][bool]$AllowExclusive) -Type DWord `
+                -Description "Allow exclusive control → $(if ($AllowExclusive) {'ON'} else {'OFF'}) [{b3f8fa53},3]" `
+                -Create
+        }
+        if ($null -ne $ExclusivePriority) {
+            Set-RegistryValue -Path $propsPath `
+                -Name "{b3f8fa53-0004-438e-9003-51a46e139bfc},4" `
+                -Value ([int][bool]$ExclusivePriority) -Type DWord `
+                -Description "Exclusive mode priority → $(if ($ExclusivePriority) {'ON'} else {'OFF'}) [{b3f8fa53},4]" `
+                -Create
+        }
 
         # --- AUDIO FORMAT ---
         Write-Log "  Target sample rate: $TargetRate Hz"
@@ -366,9 +406,11 @@ try {
 
     Write-Log "Output sample rate: $OutputRate Hz"
     Write-Log "Input sample rate:  $InputRate Hz"
+    Write-Log "Allow exclusive:    $(if ($null -ne $AllowExclusive) { if ($AllowExclusive) {'ON'} else {'OFF'} } else { 'unchanged' })"
+    Write-Log "Exclusive priority: $(if ($null -ne $ExclusivePriority) { if ($ExclusivePriority) {'ON'} else {'OFF'} } else { 'unchanged' })"
 
-    Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"  -TargetRate $OutputRate
-    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture" -TargetRate $InputRate
+    Set-DeviceSettings -HivePath $renderPath  -HiveLabel "Render"  -TargetRate $OutputRate -AllowExclusive $AllowExclusive -ExclusivePriority $ExclusivePriority
+    Set-DeviceSettings -HivePath $capturePath -HiveLabel "Capture" -TargetRate $InputRate  -AllowExclusive $AllowExclusive -ExclusivePriority $ExclusivePriority
 
     Write-Log "========================================"
     Write-Log "Audio device settings script completed"
